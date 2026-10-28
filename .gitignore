@@ -1,2 +1,9 @@
 ./.idea
 ./.idea/*
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+terraform/kubeconfig
+.env
+*.agekey

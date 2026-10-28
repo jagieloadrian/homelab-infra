@@ -1,0 +1,91 @@
+name: validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash  # -eo pipefail: błąd kustomize build nie ginie w potoku
+
+env:
+  KUBECONFORM_VERSION: v0.8.0
+  # Kindy bez wariantu standalone (CustomResourceDefinition: rekurencyjny schemat); $ref pobierane po HTTPS
+  K8S_SCHEMAS: https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/master/{{.ResourceKind}}{{.KindSuffix}}.json
+  # Schematy CRD (Flux, Istio, Gateway API) z katalogu datreeio
+  CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
+
+jobs:
+  terraform:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        dir: [terraform/k3s, terraform/flux]
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+      - run: terraform fmt -check -diff
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+
+  manifests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install kubeconform
+        run: curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" | sudo tar xz -C /usr/local/bin kubeconform
+
+      - name: Kubernetes manifests
+        run: |
+          kc() { kubeconform -strict -summary -ignore-filename-pattern 'kustomization\.yaml$' -ignore-filename-pattern '\.sops\.yaml$' -schema-location default -schema-location "$K8S_SCHEMAS" -schema-location "$CRD_SCHEMAS" "$@"; }
+          kustomize build infrastructure | kc -   # CRD Gateway API, Istio, Gateway, Postgres Service
+          kc clusters/home                        # Flux Kustomizations, rejestracje aplikacji
+          find apps -name '*.yaml' | xargs -r kc  # gotowe aplikacje (Helm)
+
+      - name: Flux substitution only for known variables
+        run: |
+          # Flux podstawia z ConfigMap cluster-vars (terraform/flux); nieznana zmienna = pusty string w klastrze
+          unknown=$(kustomize build infrastructure | grep -o '\${[A-Za-z_][A-Za-z0-9_]*}' | sort -u | grep -vx '${WYSE_IP}' || true)
+          [ -z "$unknown" ] || { echo "::error::nieznane zmienne Flux: $unknown (dodaj je do cluster-vars w terraform/flux)"; exit 1; }
+
+      - name: new-app.sh
+        run: |
+          shellcheck scripts/*.sh
+          scripts/new-app.sh own ci-smoke
+          scripts/new-app.sh helm ci-smoke https://charts.example.com chart 1.x 8080
+          scripts/new-app.sh helm ci-smoke-oci oci://ghcr.io/example/charts chart 1.x
+          kubeconform -strict -summary -schema-location default -schema-location "$CRD_SCHEMAS" \
+            clusters/home/apps/ci-smoke.yaml apps/ci-smoke apps/ci-smoke-oci
+
+  secrets:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: SOPS files are encrypted
+        run: |
+          fail=0
+          for f in $(git ls-files | grep -E '[^/]\.sops\.(yaml|yml|json|env)$'); do  # bez samych .sops.yaml (konfig SOPS)
+            grep -qE '^sops:|^sops_version=|"sops":' "$f" || { echo "::error file=$f::plik nie jest zaszyfrowany SOPS"; fail=1; }
+          done
+          exit $fail
+
+      - name: No .env in git
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$'; then echo "::error::.env jest w repo (ma zostać lokalnie, docs/setup.md krok 1)"; exit 1; fi
+
+      - name: Age key in .sops.yaml
+        run: |
+          if grep -q REPLACE_WITH .sops.yaml; then
+            # błąd dopiero gdy są pliki do odszyfrowania; sam placeholder to ostrzeżenie
+            if git ls-files | grep -qE '[^/]\.sops\.(yaml|yml|json|env)$'; then echo "::error file=.sops.yaml::brak klucza publicznego age (docs/setup.md, krok 2)"; exit 1; fi
+            echo "::warning file=.sops.yaml::brak klucza publicznego age (docs/setup.md, krok 2)"
+          fi

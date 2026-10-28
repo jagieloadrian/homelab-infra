@@ -1,0 +1,25 @@
+# Postgres na hoście Wyse (poza klastrem) jako postgres.apps.svc.cluster.local:5432 (docs/postgres.md).
+# ${WYSE_IP} podstawia Flux z ConfigMap cluster-vars (TF_VAR_wyse_host w .env).
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: apps
+spec:
+  ports:
+    - name: tcp-postgres
+      port: 5432
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: postgres-wyse
+  namespace: apps
+  labels:
+    kubernetes.io/service-name: postgres
+addressType: IPv4
+ports:
+  - name: tcp-postgres
+    port: 5432
+endpoints:
+  - addresses: ["${WYSE_IP}"]

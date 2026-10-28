@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-system
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: istio
+  namespace: istio-system
+spec:
+  interval: 24h
+  url: https://istio-release.storage.googleapis.com/charts
+---
+# ponytail: 1.31 jest jeszcze w rc; podbić na 1.31.x po wydaniu GA (wszystkie 4 charty naraz).
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: istio-base
+  namespace: istio-system
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: base
+      version: 1.30.x
+      sourceRef:
+        kind: HelmRepository
+        name: istio
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: istiod
+  namespace: istio-system
+spec:
+  interval: 1h
+  dependsOn:
+    - name: istio-base
+  chart:
+    spec:
+      chart: istiod
+      version: 1.30.x
+      sourceRef:
+        kind: HelmRepository
+        name: istio
+  values:
+    profile: ambient
+    autoscaleEnabled: false
+    nodeSelector:
+      homelab/node: rpi
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: istio-cni
+  namespace: istio-system
+spec:
+  interval: 1h
+  dependsOn:
+    - name: istio-base
+  chart:
+    spec:
+      chart: cni
+      version: 1.30.x
+      sourceRef:
+        kind: HelmRepository
+        name: istio
+  values:
+    profile: ambient
+    global:
+      platform: k3s
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ztunnel
+  namespace: istio-system
+spec:
+  interval: 1h
+  dependsOn:
+    - name: istio-base
+  chart:
+    spec:
+      chart: ztunnel
+      version: 1.30.x
+      sourceRef:
+        kind: HelmRepository
+        name: istio

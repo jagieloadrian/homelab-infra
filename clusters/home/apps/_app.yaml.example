@@ -1,0 +1,35 @@
+# Rejestracja aplikacji: cp _app.yaml.example <app>.yaml && sed -i 's/APP/<app>/g' <app>.yaml
+# Flux czyta (read-only) katalog .devops/ z repo aplikacji i wdraża go do namespace apps.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: APP
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/jagieloadrian/APP
+  ref:
+    branch: main
+  ignore: |
+    /*
+    !/.devops/
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: APP
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infrastructure
+  interval: 10m
+  path: ./.devops
+  prune: true
+  targetNamespace: apps
+  sourceRef:
+    kind: GitRepository
+    name: APP
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
