@@ -43,8 +43,8 @@ jobs:
 
       - name: Kubernetes manifests
         run: |
-          kc() { kubeconform -strict -summary -ignore-filename-pattern 'kustomization\.yaml$' -ignore-filename-pattern '\.sops\.yaml$' -schema-location default -schema-location "$CRD_SCHEMAS" "$@"; }
-          kustomize build infrastructure | kc -   # Gateway API, Istio, Gateway, Postgres Service
+          kc() { kubeconform -strict -summary -skip CustomResourceDefinition -ignore-filename-pattern 'kustomization\.yaml$' -ignore-filename-pattern '\.sops\.yaml$' -schema-location default -schema-location "$CRD_SCHEMAS" "$@"; }
+          kustomize build infrastructure | kc -   # Istio, Gateway, Postgres Service (CRD Gateway API z upstreamu: brak schematu, skip)
           kc clusters/home                        # Flux Kustomizations, rejestracje aplikacji
           find apps -name '*.yaml' | xargs -r kc  # gotowe aplikacje (Helm)
 
