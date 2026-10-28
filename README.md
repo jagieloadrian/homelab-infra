@@ -91,6 +91,7 @@ Przepływ: merge do `main` → CI buduje obraz `main-<ts>-<sha7>` → CI podbija
 - [Stawianie od zera](docs/setup.md): kolejne kroki, `.env`, klucz age, sekrety
 - [Postgres na Wyse 5070](docs/postgres.md): baza poza klastrem, użytkownik + schema per aplikacja
 - [Statistics](docs/statistics.md): wdrożenie statistics-service i statistics-ui
+- [Panele UI](docs/ui.md): Headlamp i Capacitor lokalnie, Kiali przez port-forward
 
 ## Do podbicia
 

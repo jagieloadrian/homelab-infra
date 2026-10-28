@@ -1,0 +1,77 @@
+# Kiali (graf ruchu mesha) + minimalny Prometheus, z którego Kiali bierze metryki ztunnela i istiod.
+# Bez HTTPRoute: dostęp przez port-forward (docs/ui.md).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: prometheus-community
+  namespace: istio-system
+spec:
+  interval: 24h
+  url: https://prometheus-community.github.io/helm-charts
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: kiali
+  namespace: istio-system
+spec:
+  interval: 24h
+  url: https://kiali.org/helm-charts
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: prometheus
+  namespace: istio-system
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: prometheus
+      version: 29.x
+      sourceRef:
+        kind: HelmRepository
+        name: prometheus-community
+  values:
+    alertmanager:
+      enabled: false
+    kube-state-metrics:
+      enabled: false
+    prometheus-node-exporter:
+      enabled: false
+    prometheus-pushgateway:
+      enabled: false
+    server:
+      # ponytail: emptyDir, metryki giną przy restarcie poda; persistentVolume (local-path), jeśli potrzebna historia.
+      persistentVolume:
+        enabled: false
+      retention: 2d
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: kiali
+  namespace: istio-system
+spec:
+  interval: 1h
+  dependsOn:
+    - name: prometheus
+  chart:
+    spec:
+      chart: kiali-server
+      version: 2.x
+      sourceRef:
+        kind: HelmRepository
+        name: kiali
+  values:
+    auth:
+      # ponytail: anonymous, bo dostęp tylko przez kubectl port-forward (= i tak admin klastra).
+      # Przed wystawieniem przez HTTPRoute: strategy openid przez Authelię.
+      strategy: anonymous
+    external_services:
+      prometheus:
+        url: http://prometheus-server.istio-system
+      grafana:
+        enabled: false
+      tracing:
+        enabled: false
