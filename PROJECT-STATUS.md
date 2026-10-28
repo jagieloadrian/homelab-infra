@@ -11,6 +11,7 @@
 - `scripts/new-app.sh`: `own <name>` (rejestracja `.devops/`) i `helm <name> <repo> <chart> <wersja> [port]` (HelmRepository http/OCI, HelmRelease, HTTPRoute, AuthorizationPolicy). Przetestowany na Authelia i podinfo (OCI).
 - Dokument kontraktu zaktualizowany: `.devops/`, CI commituje tag, rejestracja skryptem, sekcja „Gotowe aplikacje”, nowy diagram CI/CD, Istio 1.30.
 - CI (GitHub Actions): `homelab-infra/.github/workflows/validate.yml` (terraform fmt/validate obu katalogów, kubeconform z katalogiem CRD na `kustomize build infrastructure`, `clusters/home`, `apps/`, tylko znane zmienne Flux, shellcheck + smoke `new-app.sh`, pliki `*.sops.*` zaszyfrowane, brak `.env` w gicie, klucz age). W repo aplikacji `devops.yml`: kustomize build + kubeconform `.devops/k8s`, w statistics-service dodatkowo format `config.env`, brak sekretów w nim, `secrets.sops.env` zaszyfrowany z kompletem kluczy.
+- Panele UI (`docs/ui.md`): Headlamp i Capacitor lokalnie z kubeconfigiem; Kiali + Prometheus (tylko server, emptyDir, 2d) w `istio-system` przez `infrastructure/kiali.yaml`, dostęp port-forwardem.
 - Weryfikacja: `terraform validate` i `fmt` w obu katalogach, `kustomize build`, `helm template` chartów Istio z użytymi values. Na żywym klastrze nic nie było jeszcze uruchamiane.
 
 ## Decyzje
@@ -23,6 +24,7 @@
 - Manifesty i sekrety (SOPS) w `.devops/` repo aplikacji, nie tutaj. CI podbija tag w `.devops/` commitem z `GITHUB_TOKEN`, więc Flux tylko czyta. Bez image automation (kontrakt zaktualizowany).
 - Baza: istniejący Postgres na hoście Wyse (poza k3s), baza `statistics`, użytkownik + schema per aplikacja, w klastrze Service bez selektora + EndpointSlice (`docs/postgres.md`). Bez CNPG i bez Postgresa w klastrze.
 - Wejścia jako zmienne środowiskowe: `homelab-infra/.env` (`TF_VAR_*`, poza gitem); IP Wyse trafia do klastra przez ConfigMap `cluster-vars` i `postBuild.substituteFrom` (bez IP w gicie). Aplikacje: `.devops/k8s/config.env` (jawny) + `secrets.sops.env` (SOPS dotenv) przez generatory kustomize.
+- UI: Headlamp/Capacitor lokalnie (zero zasobów w klastrze, bez wystawiania konsoli admina). Kiali `auth.strategy: anonymous`, bo bez HTTPRoute; Prometheus z domyślnymi jobami charta (adnotacje `prometheus.io/*` łapią ztunnel i istiod).
 - Gotowe aplikacje (Helm) żyją tutaj w `apps/<name>/`, aktualizacje przez zakres semver w HelmRelease (bez Renovate).
 
 ## Następne kroki
@@ -30,5 +32,6 @@
 - CI `devops` w statistics-service jest czerwone, dopóki nie ma `secrets.sops.env` i prawdziwego klucza age w `.sops.yaml` (celowo).
 - Postawić całość według `docs/setup.md` (kroki 0–8): `.env`, klucz age w obu `.sops.yaml`, `secrets.sops.env` statistics-service, Postgres na Wyse, merge `feature-6` → `main` w obu repo aplikacji, paczki GHCR publiczne.
 - Podbić Istio do 1.31.x po GA.
+- Kiali: przed HTTPRoute przełączyć na `openid` przez Authelię; waypoint w `apps` dla metryk L7.
 - Authelia: values (`pod.kind: Deployment`, storage, OIDC), potem forward-auth przez `extensionProviders` w istiod.
 - Opcjonalnie: Renovate (major bumpy chartów), notyfikacje Flux, Secret `ghcr-pull` dla prywatnych obrazów, pierwsza aplikacja (`hello`).
