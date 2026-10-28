@@ -8,8 +8,10 @@ Platforma z dokumentu „Homelab Platform Contract”: 2-node'owy k3s (RPi5 arm6
 | Flux, Secret `sops-age` | `terraform/flux` | Terraform (`fluxcd/flux`) |
 | Gateway API v1.6 CRDs, Istio ambient (base, istiod, cni, ztunnel) | `infrastructure/` | Flux |
 | Gateway `home-gateway` (`istio-ingress`), namespace `apps` z ambient | `infrastructure/platform.yaml` | Flux |
-| Lista aplikacji: plik na aplikację | `clusters/home/apps/` | Flux (read-only z repo aplikacji) |
-| Manifesty aplikacji | `.devops/` w repo aplikacji | Flux |
+| Własne aplikacje: lista, plik na aplikację | `clusters/home/apps/` | Flux (read-only z repo aplikacji) |
+| Manifesty własnych aplikacji | `.devops/` w repo aplikacji | Flux |
+| Gotowe aplikacje (Helm chart, bez budowania) | `apps/<name>/` | Flux |
+| Rejestracja aplikacji | `scripts/new-app.sh` | skrypt |
 
 ## Wymagania
 
@@ -24,7 +26,7 @@ Platforma z dokumentu „Homelab Platform Contract”: 2-node'owy k3s (RPi5 arm6
 # 0. Ten katalog musi być na GitHubie (Flux czyta clusters/home z main)
 git push
 
-# 1. Klucz age (prywatny trafia do klastra, publiczny do .sops.yaml w repo aplikacji)
+# 1. Klucz age (prywatny trafia do klastra, publiczny do .sops.yaml tutaj i w repo aplikacji)
 age-keygen -o ~/.config/sops/age/keys.txt
 
 # 2. k3s
@@ -45,7 +47,44 @@ flux get kustomizations
 kubectl -n istio-ingress get gateway home-gateway
 ```
 
-## Nowa aplikacja
+## Aplikacje
+
+Dwa rodzaje, oba w namespace `apps` (ambient mesh):
+
+| Rodzaj | Konfig | Rejestracja | Aktualizacje |
+| --- | --- | --- | --- |
+| Własna (budowana w CI) | `.devops/` w repo aplikacji | `scripts/new-app.sh own <name>` | CI commituje nowy tag do `.devops/` |
+| Gotowa (Helm chart: Authelia, oauth2-proxy…) | `apps/<name>/` tutaj | `scripts/new-app.sh helm <name> <repo> <chart> <wersja> [port]` | Flux sam instaluje nowe wersje z zakresu semver |
+
+### Gotowa aplikacja (Helm chart)
+
+```bash
+scripts/new-app.sh helm authelia https://charts.authelia.com authelia 0.11.x 80
+```
+
+Powstaje `apps/authelia/release.yaml`: HelmRepository (OCI też: `oci://...`), HelmRelease, HTTPRoute `authelia.home.arpa`, AuthorizationPolicy. Potem:
+
+1. `helm show values authelia --repo https://charts.authelia.com` i wpisz potrzebne `values` (checklista kontraktu w pliku).
+2. Sekrety (hasła, klucze OIDC) jako values w Secret:
+   ```bash
+   cat > apps/authelia/secret.sops.yaml <<'EOF'
+   apiVersion: v1
+   kind: Secret
+   metadata:
+     name: authelia-values
+   stringData:
+     values.yaml: |
+       # wrażliwe values charta
+   EOF
+   sops -e -i apps/authelia/secret.sops.yaml   # .sops.yaml: wpisz swój klucz publiczny age
+   ```
+   i odkomentuj `valuesFrom` w HelmRelease. Nigdy nie commituj niezaszyfrowanego pliku.
+3. Commit + push. Flux wdraża w ≤ 10 min (`flux reconcile kustomization apps --with-source` od razu).
+
+Wersja `0.11.x` oznacza, że Flux sam instaluje nowe wydania 0.11.*. Major bump to ręczna zmiana zakresu.
+Authelia: chart domyślnie tworzy DaemonSet, ustaw `pod.kind: Deployment`. Forward-auth dla innych aplikacji wymaga `extensionProviders` w istiod (osobny krok).
+
+### Własna aplikacja (`.devops/`)
 
 Przepływ: merge do `main` → CI buduje obraz `main-<ts>-<sha7>` → CI podbija tag w `.devops/` i commituje → Flux (co 1 min) widzi commit → rollout. Rollback = `git revert` w repo aplikacji.
 
@@ -69,11 +108,7 @@ Przepływ: merge do `main` → CI buduje obraz `main-<ts>-<sha7>` → CI podbija
              git pull --rebase && git push
    ```
    Push z `GITHUB_TOKEN` nie odpala kolejnego workflow, więc nie ma pętli. Branch protection na `main` musi przepuszczać `github-actions[bot]`.
-4. Rejestracja tutaj:
-   ```bash
-   cd clusters/home/apps
-   cp _app.yaml.example hello.yaml && sed -i 's/APP/hello/g' hello.yaml
-   ```
+4. Rejestracja tutaj: `scripts/new-app.sh own hello`, commit + push.
    Prywatne repo aplikacji: dodaj `secretRef` z read-only tokenem do `GitRepository`.
 
 ## Do podbicia
