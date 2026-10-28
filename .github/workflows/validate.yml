@@ -14,6 +14,8 @@ defaults:
 
 env:
   KUBECONFORM_VERSION: v0.8.0
+  # Kindy bez wariantu standalone (CustomResourceDefinition: rekurencyjny schemat); $ref pobierane po HTTPS
+  K8S_SCHEMAS: https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/master/{{.ResourceKind}}{{.KindSuffix}}.json
   # Schematy CRD (Flux, Istio, Gateway API) z katalogu datreeio
   CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 
@@ -43,8 +45,8 @@ jobs:
 
       - name: Kubernetes manifests
         run: |
-          kc() { kubeconform -strict -summary -skip CustomResourceDefinition -ignore-filename-pattern 'kustomization\.yaml$' -ignore-filename-pattern '\.sops\.yaml$' -schema-location default -schema-location "$CRD_SCHEMAS" "$@"; }
-          kustomize build infrastructure | kc -   # Istio, Gateway, Postgres Service (CRD Gateway API z upstreamu: brak schematu, skip)
+          kc() { kubeconform -strict -summary -ignore-filename-pattern 'kustomization\.yaml$' -ignore-filename-pattern '\.sops\.yaml$' -schema-location default -schema-location "$K8S_SCHEMAS" -schema-location "$CRD_SCHEMAS" "$@"; }
+          kustomize build infrastructure | kc -   # CRD Gateway API, Istio, Gateway, Postgres Service
           kc clusters/home                        # Flux Kustomizations, rejestracje aplikacji
           find apps -name '*.yaml' | xargs -r kc  # gotowe aplikacje (Helm)
 
