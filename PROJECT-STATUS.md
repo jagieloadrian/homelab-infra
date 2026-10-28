@@ -10,6 +10,7 @@
 - `apps/<name>/`: gotowe aplikacje z Helm charta (Kustomization `apps`, `targetNamespace: apps`, SOPS), szablon `apps/_template/release.yaml.tpl`.
 - `scripts/new-app.sh`: `own <name>` (rejestracja `.devops/`) i `helm <name> <repo> <chart> <wersja> [port]` (HelmRepository http/OCI, HelmRelease, HTTPRoute, AuthorizationPolicy). Przetestowany na Authelia i podinfo (OCI).
 - Dokument kontraktu zaktualizowany: `.devops/`, CI commituje tag, rejestracja skryptem, sekcja „Gotowe aplikacje”, nowy diagram CI/CD, Istio 1.30.
+- CI (GitHub Actions): `homelab-infra/.github/workflows/validate.yml` (terraform fmt/validate obu katalogów, kubeconform z katalogiem CRD na `kustomize build infrastructure`, `clusters/home`, `apps/`, tylko znane zmienne Flux, shellcheck + smoke `new-app.sh`, pliki `*.sops.*` zaszyfrowane, brak `.env` w gicie, klucz age). W repo aplikacji `devops.yml`: kustomize build + kubeconform `.devops/k8s`, w statistics-service dodatkowo format `config.env`, brak sekretów w nim, `secrets.sops.env` zaszyfrowany z kompletem kluczy.
 - Weryfikacja: `terraform validate` i `fmt` w obu katalogach, `kustomize build`, `helm template` chartów Istio z użytymi values. Na żywym klastrze nic nie było jeszcze uruchamiane.
 
 ## Decyzje
@@ -26,6 +27,7 @@
 
 ## Następne kroki
 
+- CI `devops` w statistics-service jest czerwone, dopóki nie ma `secrets.sops.env` i prawdziwego klucza age w `.sops.yaml` (celowo).
 - Postawić całość według `docs/setup.md` (kroki 0–8): `.env`, klucz age w obu `.sops.yaml`, `secrets.sops.env` statistics-service, Postgres na Wyse, merge `feature-6` → `main` w obu repo aplikacji, paczki GHCR publiczne.
 - Podbić Istio do 1.31.x po GA.
 - Authelia: values (`pod.kind: Deployment`, storage, OIDC), potem forward-auth przez `extensionProviders` w istiod.
