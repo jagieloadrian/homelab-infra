@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-ingress
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: apps
+  labels:
+    istio.io/dataplane-mode: ambient
+---
+# Istio tworzy z tego Deployment + ServiceAccount home-gateway-istio i Service LoadBalancer (servicelb na RPi5).
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: home-gateway
+  namespace: istio-ingress
+spec:
+  gatewayClassName: istio
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      hostname: "*.home.arpa"
+      allowedRoutes:
+        namespaces:
+          from: All
