@@ -1,4 +1,4 @@
-# Etap 2: bootstrap Flux (z image automation) do tego repo + klucz age dla SOPS.
+# Etap 2: bootstrap Flux do tego repo + klucz age dla SOPS (sekrety w .devops/ aplikacji).
 # Reszta platformy (Gateway API, Istio ambient, Gateway, namespace apps) to YAML w clusters/ i infrastructure/.
 
 terraform {
@@ -24,7 +24,7 @@ variable "github_repository" {
   default = "homelab-infra"
 }
 
-# Fine-grained PAT tylko na to repo, Contents: read & write (Flux commituje nowe tagi image).
+# Fine-grained PAT tylko na to repo, Contents: read & write (bootstrap commituje clusters/home/flux-system).
 variable "github_token" {
   type      = string
   sensitive = true
@@ -54,8 +54,7 @@ provider "flux" {
 }
 
 resource "flux_bootstrap_git" "this" {
-  path             = "clusters/home"
-  components_extra = ["image-reflector-controller", "image-automation-controller"]
+  path = "clusters/home"
 }
 
 resource "kubernetes_secret_v1" "sops_age" {

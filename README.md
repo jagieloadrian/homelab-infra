@@ -1,15 +1,15 @@
 # homelab-infra
 
-Platforma z dokumentu „Homelab Platform Contract”: 2-node'owy k3s (RPi5 arm64 + Dell Wyse 5070 amd64), Istio ambient, Gateway API, Flux z image automation, SOPS (age).
+Platforma z dokumentu „Homelab Platform Contract”: 2-node'owy k3s (RPi5 arm64 + Dell Wyse 5070 amd64), Istio ambient, Gateway API, Flux, SOPS (age).
 
 | Co | Gdzie | Jak |
 | --- | --- | --- |
 | k3s server (RPi5, `homelab/node=rpi`) + agent (Wyse, `homelab/node=wyse`) | `terraform/k3s` | Terraform przez SSH |
-| Flux + image-reflector/automation, Secret `sops-age` | `terraform/flux` | Terraform (`fluxcd/flux`) |
+| Flux, Secret `sops-age` | `terraform/flux` | Terraform (`fluxcd/flux`) |
 | Gateway API v1.6 CRDs, Istio ambient (base, istiod, cni, ztunnel) | `infrastructure/` | Flux |
 | Gateway `home-gateway` (`istio-ingress`), namespace `apps` z ambient | `infrastructure/platform.yaml` | Flux |
-| Kustomizations `infrastructure` → `apps`, `ImageUpdateAutomation` | `clusters/home/platform.yaml` | Flux |
-| Aplikacje (`apps/<app>/`) | `apps/` | Flux, obrazy podbija image automation |
+| Lista aplikacji: plik na aplikację | `clusters/home/apps/` | Flux (read-only z repo aplikacji) |
+| Manifesty aplikacji | `.devops/` w repo aplikacji | Flux |
 
 ## Wymagania
 
@@ -24,9 +24,8 @@ Platforma z dokumentu „Homelab Platform Contract”: 2-node'owy k3s (RPi5 arm6
 # 0. Ten katalog musi być na GitHubie (Flux czyta clusters/home z main)
 git push
 
-# 1. Klucz age (prywatny trafia do klastra, publiczny do .sops.yaml)
+# 1. Klucz age (prywatny trafia do klastra, publiczny do .sops.yaml w repo aplikacji)
 age-keygen -o ~/.config/sops/age/keys.txt
-age-keygen -y ~/.config/sops/age/keys.txt   # wklej do .sops.yaml
 
 # 2. k3s
 cd terraform/k3s
@@ -48,10 +47,34 @@ kubectl -n istio-ingress get gateway home-gateway
 
 ## Nowa aplikacja
 
-1. `apps/<app>/` z manifestami wg kontraktu (ServiceAccount, Deployment, Service, HTTPRoute, AuthorizationPolicy).
-2. Dopisz `<app>` do `apps/kustomization.yaml`.
-3. `ImageRepository` + `ImagePolicy` dla `ghcr.io/jagieloadrian/<app>` w `clusters/home/` (wzór w kontrakcie).
-4. Sekrety: `sops -e -i apps/<app>/secret.sops.yaml`.
+Przepływ: merge do `main` → CI buduje obraz `main-<ts>-<sha7>` → CI podbija tag w `.devops/` i commituje → Flux (co 1 min) widzi commit → rollout. Rollback = `git revert` w repo aplikacji.
+
+1. W repo aplikacji katalog `.devops/` z manifestami wg kontraktu (ServiceAccount, Deployment, Service, HTTPRoute, AuthorizationPolicy). `namespace` można pominąć, Flux wymusza `apps`.
+2. Sekrety jako `.devops/*.sops.yaml` zaszyfrowane kluczem age; `.sops.yaml` w repo aplikacji:
+   ```yaml
+   creation_rules:
+     - path_regex: \.devops/.*\.sops\.yaml$
+       encrypted_regex: ^(data|stringData)$
+       age: age1...   # age-keygen -y ~/.config/sops/age/keys.txt
+   ```
+3. W workflow `build` z kontraktu: `permissions.contents: write` i krok po pushu obrazu:
+   ```yaml
+         - name: Deploy (bump image tag)
+           if: github.ref == 'refs/heads/main'
+           run: |
+             sed -i -E "s#(image: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}):[^[:space:]]+#\1:${{ steps.tag.outputs.tag }}#" .devops/*.yaml
+             git config user.name 'github-actions[bot]'
+             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+             git commit -am "chore(deploy): ${{ steps.tag.outputs.tag }}"
+             git pull --rebase && git push
+   ```
+   Push z `GITHUB_TOKEN` nie odpala kolejnego workflow, więc nie ma pętli. Branch protection na `main` musi przepuszczać `github-actions[bot]`.
+4. Rejestracja tutaj:
+   ```bash
+   cd clusters/home/apps
+   cp _app.yaml.example hello.yaml && sed -i 's/APP/hello/g' hello.yaml
+   ```
+   Prywatne repo aplikacji: dodaj `secretRef` z read-only tokenem do `GitRepository`.
 
 ## Do podbicia
 

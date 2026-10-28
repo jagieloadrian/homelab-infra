@@ -1,4 +1,0 @@
-# Każda aplikacja: katalog apps/<app>/ wg Homelab Platform Contract, dopisany tutaj.
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources: []
