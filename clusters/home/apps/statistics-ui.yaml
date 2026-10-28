@@ -1,0 +1,35 @@
+# Rejestracja aplikacji: cp _app.yaml.example <app>.yaml && sed -i 's/statistics-ui/<app>/g' <app>.yaml
+# Flux czyta (read-only) katalog .devops/ z repo aplikacji i wdraża go do namespace apps.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: statistics-ui
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://github.com/jagieloadrian/statistics-ui
+  ref:
+    branch: main
+  ignore: |
+    /*
+    !/.devops/k8s/
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: statistics-ui
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infrastructure
+  interval: 10m
+  path: ./.devops/k8s
+  prune: true
+  targetNamespace: apps
+  sourceRef:
+    kind: GitRepository
+    name: statistics-ui
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age

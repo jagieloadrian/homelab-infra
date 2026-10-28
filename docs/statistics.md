@@ -41,7 +41,7 @@ Powód: w `.devops/` leżą też pliki compose (`authelia-compose/`, `postgres-c
 1. Na Wyse utwórz użytkownika i schemę `statistics` według [postgres.md](postgres.md), sekcja „Każda aplikacja”.
 2. `.devops/k8s/configmap.yaml`:
    ```yaml
-   DB_URL: jdbc:postgresql://postgres.apps.svc.cluster.local:5432/homelab?currentSchema=statistics
+   DB_URL: jdbc:postgresql://postgres.apps.svc.cluster.local:5432/statistics?currentSchema=statistics
    DB_USER: statistics
    ```
    Obecny `postgres.databases.svc.cluster.local:5432/statistics` wskazuje na Service, który nie istnieje.

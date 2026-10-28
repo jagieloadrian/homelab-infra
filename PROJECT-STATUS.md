@@ -25,8 +25,12 @@
 
 ## Następne kroki
 
-- Wdrożyć statistics-service i statistics-ui według `docs/statistics.md` (ścieżka `.devops/k8s`, usunąć image automation, sekrety SOPS, konfiguracja bazy).
-- Postgres na Wyse: `listen_addresses`, `pg_hba`, baza `homelab`, `infrastructure/postgres.yaml` (`docs/postgres.md`).
+- Statistics: zarejestrowane (`clusters/home/apps/statistics-*.yaml`, ścieżka `.devops/k8s`). W repo aplikacji, na gałęzi `feature-6/cleaning-and-refactoring`, CI deploy jest gotowe, image automation usunięte, a `DB_URL` wskazuje na Postgresa na Wyse. Brakuje:
+  - `infrastructure/postgres.yaml` z IP Wyse (podpięty w `infrastructure/kustomization.yaml`),
+  - klucza age i `.devops/k8s/secrets.sops.yaml` + `.sops.yaml` w statistics-service,
+  - roli i schemy `statistics` w bazie `statistics` na Wyse,
+  - merge `feature-6` do `main` w obu repo (Flux czyta `main`).
+- Postgres na Wyse: `listen_addresses`, `pg_hba`, baza `statistics` (`docs/postgres.md`).
 - Push, potem `terraform apply` w `k3s` i `flux`, potem weryfikacja na klastrze (kroki w README).
 - Podbić Istio do 1.31.x po GA.
 - Authelia: values (`pod.kind: Deployment`, storage, OIDC), potem forward-auth przez `extensionProviders` w istiod.
