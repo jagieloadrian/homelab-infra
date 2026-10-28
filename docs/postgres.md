@@ -23,37 +23,11 @@ Aplikacje w k3s korzystają z Postgresa działającego na hoście Wyse, poza kla
    ```
 4. RAM: Postgres i Home Assistant zużywają pamięć spoza puli kubeleta. `wyse_system_reserved_memory` w `terraform/k3s` (domyślnie `4Gi`) musi pokryć oba. Więcej rezerwy oznacza mniej niż ok. 3.4 GiB dla podów.
 
-## Raz: adres w klastrze
+## Adres w klastrze (już w repo)
 
-Plik `infrastructure/postgres.yaml`, dopisany do `resources` w `infrastructure/kustomization.yaml`:
+`infrastructure/postgres.yaml` to Service `postgres` bez selektora i EndpointSlice z adresem `${WYSE_IP}`. Flux podstawia ten adres z ConfigMap `flux-system/cluster-vars`, którą `terraform/flux` tworzy z `TF_VAR_wyse_host` w `.env` ([setup.md](setup.md), krok 1). Zmiana IP to zmiana w `.env` i ponowny `terraform apply` w `terraform/flux`.
 
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres
-  namespace: apps
-spec:
-  ports:
-    - name: tcp-postgres
-      port: 5432
----
-apiVersion: discovery.k8s.io/v1
-kind: EndpointSlice
-metadata:
-  name: postgres-wyse
-  namespace: apps
-  labels:
-    kubernetes.io/service-name: postgres
-addressType: IPv4
-ports:
-  - name: tcp-postgres # musi się zgadzać z nazwą portu w Service
-    port: 5432
-endpoints:
-  - addresses: ["<IP Wyse>"]
-```
-
-Service nie ma selektora, więc ruch idzie na adres z EndpointSlice. Mesh (ambient) przepuszcza ruch do celu spoza meshu jako zwykłe TCP. AuthorizationPolicy go nie obejmuje, a granicą między aplikacjami są użytkownicy Postgresa.
+Mesh (ambient) przepuszcza ruch do celu spoza meshu jako zwykłe TCP. AuthorizationPolicy go nie obejmuje, a granicą między aplikacjami są użytkownicy Postgresa.
 
 ## Każda aplikacja: użytkownik i schema
 
@@ -83,7 +57,7 @@ kubectl -n apps run psql --rm -it --restart=Never --image=postgres:16 -- \
 ## Po stronie aplikacji
 
 - URL: `jdbc:postgresql://postgres.apps.svc.cluster.local:5432/statistics?currentSchema=<app>`.
-- Hasło w Secret zaszyfrowanym SOPS w `.devops/` repo aplikacji (README: „Własna aplikacja”), nigdy w ConfigMap.
+- Hasło w `.devops/k8s/secrets.sops.env` repo aplikacji (SOPS), nigdy w `config.env` ([setup.md](setup.md), krok 1).
 - Flyway bez dodatkowej konfiguracji używa pierwszej schemy z `search_path`, więc migracje i `flyway_schema_history` lądują w schemie aplikacji.
 
 ## Backup

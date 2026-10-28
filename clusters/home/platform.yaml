@@ -12,6 +12,10 @@ spec:
   sourceRef:
     kind: GitRepository
     name: flux-system
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-vars # tworzy terraform/flux z .env
 ---
 # Gotowe aplikacje (Helm charty) z apps/<name>/ w tym repo.
 apiVersion: kustomize.toolkit.fluxcd.io/v1

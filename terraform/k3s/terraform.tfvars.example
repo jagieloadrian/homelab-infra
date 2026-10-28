@@ -1,3 +1,0 @@
-rpi_host  = "192.168.1.10"
-wyse_host = "192.168.1.11"
-ssh_user  = "pi"

@@ -13,39 +13,11 @@ Platforma z dokumentu „Homelab Platform Contract”: 2-node'owy k3s (RPi5 arm6
 | Gotowe aplikacje (Helm chart, bez budowania) | `apps/<name>/` | Flux |
 | Rejestracja aplikacji | `scripts/new-app.sh` | skrypt |
 
-## Wymagania
+## Stawianie od zera
 
-- Oba hosty: SSH kluczem, `sudo` bez hasła.
-- RPi5: w `/boot/firmware/cmdline.txt` dopisane `cgroup_memory=1 cgroup_enable=memory`, potem reboot.
-- Lokalnie: `terraform` ≥ 1.6, `age`, `sops`.
-- DNS: wildcard `*.home.arpa` → IP RPi5 (router albo Pi-hole).
+Krok po kroku, razem z tym, co wpisać do `.env` i plików sekretów: **[docs/setup.md](docs/setup.md)**.
 
-## Uruchomienie
-
-```bash
-# 0. Ten katalog musi być na GitHubie (Flux czyta clusters/home z main)
-git push
-
-# 1. Klucz age (prywatny trafia do klastra, publiczny do .sops.yaml tutaj i w repo aplikacji)
-age-keygen -o ~/.config/sops/age/keys.txt
-
-# 2. k3s
-cd terraform/k3s
-cp terraform.tfvars.example terraform.tfvars   # uzupełnij IP i usera
-terraform init && terraform apply              # zapisuje terraform/kubeconfig
-
-# 3. Flux (PAT fine-grained: tylko to repo, Contents read & write)
-cd ../flux
-export TF_VAR_github_token=github_pat_...
-terraform init && terraform apply
-git pull                                       # bootstrap commituje clusters/home/flux-system
-
-# 4. Sprawdzenie
-export KUBECONFIG=$PWD/../kubeconfig
-kubectl get nodes -L homelab/node
-flux get kustomizations
-kubectl -n istio-ingress get gateway home-gateway
-```
+W skrócie: `.env` (wejścia Terraform) → klucz age → sekrety aplikacji → Postgres na Wyse → push → `terraform apply` w `terraform/k3s`, potem w `terraform/flux`.
 
 ## Aplikacje
 
@@ -89,13 +61,16 @@ Authelia: chart domyślnie tworzy DaemonSet, ustaw `pod.kind: Deployment`. Forwa
 Przepływ: merge do `main` → CI buduje obraz `main-<ts>-<sha7>` → CI podbija tag w `.devops/` i commituje → Flux (co 1 min) widzi commit → rollout. Rollback = `git revert` w repo aplikacji.
 
 1. W repo aplikacji katalog `.devops/` z manifestami wg kontraktu (ServiceAccount, Deployment, Service, HTTPRoute, AuthorizationPolicy). `namespace` można pominąć, Flux wymusza `apps`.
-2. Sekrety jako `.devops/*.sops.yaml` zaszyfrowane kluczem age; `.sops.yaml` w repo aplikacji:
-   ```yaml
-   creation_rules:
-     - path_regex: \.devops/.*\.sops\.yaml$
-       encrypted_regex: ^(data|stringData)$
-       age: age1...   # age-keygen -y ~/.config/sops/age/keys.txt
-   ```
+2. Zmienne środowiskowe jako pliki dotenv obok manifestów (wzór: StatisticsService `.devops/k8s/`):
+   - `config.env`: jawna konfiguracja, `configMapGenerator`,
+   - `secrets.sops.env`: sekrety, `secretGenerator`, tworzone i edytowane tylko przez `sops <plik>`; Flux odszyfrowuje przy budowaniu,
+   - Deployment: `envFrom` na nazwy generatorów (kustomize dopisuje hash, więc zmiana pliku robi rollout),
+   - `.sops.yaml` w repo aplikacji:
+     ```yaml
+     creation_rules:
+       - path_regex: \.devops/k8s/secrets\.sops\.env$
+         age: age1...   # age-keygen -y ~/.config/sops/age/keys.txt
+     ```
 3. W workflow `build` z kontraktu: `permissions.contents: write` i krok po pushu obrazu:
    ```yaml
          - name: Deploy (bump image tag)
@@ -107,12 +82,13 @@ Przepływ: merge do `main` → CI buduje obraz `main-<ts>-<sha7>` → CI podbija
              git commit -am "chore(deploy): ${{ steps.tag.outputs.tag }}"
              git pull --rebase && git push
    ```
-   Push z `GITHUB_TOKEN` nie odpala kolejnego workflow, więc nie ma pętli. Branch protection na `main` musi przepuszczać `github-actions[bot]`.
+   `.devops/*.yaml` zamień na katalog, w którym leży Deployment (np. `.devops/k8s/*.yaml`). Push z `GITHUB_TOKEN` nie odpala kolejnego workflow, więc nie ma pętli. Branch protection na `main` musi przepuszczać `github-actions[bot]`.
 4. Rejestracja tutaj: `scripts/new-app.sh own hello`, commit + push.
    Prywatne repo aplikacji: dodaj `secretRef` z read-only tokenem do `GitRepository`.
 
 ## Instrukcje
 
+- [Stawianie od zera](docs/setup.md): kolejne kroki, `.env`, klucz age, sekrety
 - [Postgres na Wyse 5070](docs/postgres.md): baza poza klastrem, użytkownik + schema per aplikacja
 - [Statistics](docs/statistics.md): wdrożenie statistics-service i statistics-ui
 

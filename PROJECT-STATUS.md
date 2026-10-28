@@ -20,18 +20,13 @@
 - Istio `1.30.x`, bo 1.31 jest w Helm repo tylko jako RC (kontrakt zakłada 1.31).
 - Repo Flux to `homelab-infra`, a kontrakt mówi o `homelab`.
 - Manifesty i sekrety (SOPS) w `.devops/` repo aplikacji, nie tutaj. CI podbija tag w `.devops/` commitem z `GITHUB_TOKEN`, więc Flux tylko czyta. Bez image automation (kontrakt zaktualizowany).
-- Baza: istniejący Postgres na hoście Wyse (poza k3s), baza `homelab`, użytkownik + schema per aplikacja, w klastrze Service bez selektora + EndpointSlice (`docs/postgres.md`). Bez CNPG i bez Postgresa w klastrze.
+- Baza: istniejący Postgres na hoście Wyse (poza k3s), baza `statistics`, użytkownik + schema per aplikacja, w klastrze Service bez selektora + EndpointSlice (`docs/postgres.md`). Bez CNPG i bez Postgresa w klastrze.
+- Wejścia jako zmienne środowiskowe: `homelab-infra/.env` (`TF_VAR_*`, poza gitem); IP Wyse trafia do klastra przez ConfigMap `cluster-vars` i `postBuild.substituteFrom` (bez IP w gicie). Aplikacje: `.devops/k8s/config.env` (jawny) + `secrets.sops.env` (SOPS dotenv) przez generatory kustomize.
 - Gotowe aplikacje (Helm) żyją tutaj w `apps/<name>/`, aktualizacje przez zakres semver w HelmRelease (bez Renovate).
 
 ## Następne kroki
 
-- Statistics: zarejestrowane (`clusters/home/apps/statistics-*.yaml`, ścieżka `.devops/k8s`). W repo aplikacji, na gałęzi `feature-6/cleaning-and-refactoring`, CI deploy jest gotowe, image automation usunięte, a `DB_URL` wskazuje na Postgresa na Wyse. Brakuje:
-  - `infrastructure/postgres.yaml` z IP Wyse (podpięty w `infrastructure/kustomization.yaml`),
-  - klucza age i `.devops/k8s/secrets.sops.yaml` + `.sops.yaml` w statistics-service,
-  - roli i schemy `statistics` w bazie `statistics` na Wyse,
-  - merge `feature-6` do `main` w obu repo (Flux czyta `main`).
-- Postgres na Wyse: `listen_addresses`, `pg_hba`, baza `statistics` (`docs/postgres.md`).
-- Push, potem `terraform apply` w `k3s` i `flux`, potem weryfikacja na klastrze (kroki w README).
+- Postawić całość według `docs/setup.md` (kroki 0–8): `.env`, klucz age w obu `.sops.yaml`, `secrets.sops.env` statistics-service, Postgres na Wyse, merge `feature-6` → `main` w obu repo aplikacji, paczki GHCR publiczne.
 - Podbić Istio do 1.31.x po GA.
 - Authelia: values (`pod.kind: Deployment`, storage, OIDC), potem forward-auth przez `extensionProviders` w istiod.
 - Opcjonalnie: Renovate (major bumpy chartów), notyfikacje Flux, Secret `ghcr-pull` dla prywatnych obrazów, pierwsza aplikacja (`hello`).

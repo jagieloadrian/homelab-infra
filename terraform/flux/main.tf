@@ -35,6 +35,11 @@ variable "age_key_file" {
   default = "~/.config/sops/age/keys.txt"
 }
 
+variable "wyse_host" {
+  type        = string
+  description = "IP Wyse 5070 (Postgres poza klastrem), w manifestach infrastructure/ jako $${WYSE_IP}"
+}
+
 provider "kubernetes" {
   config_path = var.kubeconfig
 }
@@ -67,5 +72,19 @@ resource "kubernetes_secret_v1" "sops_age" {
 
   data = {
     "age.agekey" = file(pathexpand(var.age_key_file))
+  }
+}
+
+# Zmienne z .env podstawiane przez Flux w infrastructure/ (postBuild.substituteFrom), bez IP w gicie.
+resource "kubernetes_config_map_v1" "cluster_vars" {
+  depends_on = [flux_bootstrap_git.this]
+
+  metadata {
+    name      = "cluster-vars"
+    namespace = "flux-system"
+  }
+
+  data = {
+    WYSE_IP = var.wyse_host
   }
 }
