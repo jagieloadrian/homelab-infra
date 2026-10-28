@@ -20,10 +20,13 @@
 - Istio `1.30.x`, bo 1.31 jest w Helm repo tylko jako RC (kontrakt zakłada 1.31).
 - Repo Flux to `homelab-infra`, a kontrakt mówi o `homelab`.
 - Manifesty i sekrety (SOPS) w `.devops/` repo aplikacji, nie tutaj. CI podbija tag w `.devops/` commitem z `GITHUB_TOKEN`, więc Flux tylko czyta. Bez image automation (kontrakt zaktualizowany).
+- Baza: istniejący Postgres na hoście Wyse (poza k3s), baza `homelab`, użytkownik + schema per aplikacja, w klastrze Service bez selektora + EndpointSlice (`docs/postgres.md`). Bez CNPG i bez Postgresa w klastrze.
 - Gotowe aplikacje (Helm) żyją tutaj w `apps/<name>/`, aktualizacje przez zakres semver w HelmRelease (bez Renovate).
 
 ## Następne kroki
 
+- Wdrożyć statistics-service i statistics-ui według `docs/statistics.md` (ścieżka `.devops/k8s`, usunąć image automation, sekrety SOPS, konfiguracja bazy).
+- Postgres na Wyse: `listen_addresses`, `pg_hba`, baza `homelab`, `infrastructure/postgres.yaml` (`docs/postgres.md`).
 - Push, potem `terraform apply` w `k3s` i `flux`, potem weryfikacja na klastrze (kroki w README).
 - Podbić Istio do 1.31.x po GA.
 - Authelia: values (`pod.kind: Deployment`, storage, OIDC), potem forward-auth przez `extensionProviders` w istiod.

@@ -111,6 +111,11 @@ Przepływ: merge do `main` → CI buduje obraz `main-<ts>-<sha7>` → CI podbija
 4. Rejestracja tutaj: `scripts/new-app.sh own hello`, commit + push.
    Prywatne repo aplikacji: dodaj `secretRef` z read-only tokenem do `GitRepository`.
 
+## Instrukcje
+
+- [Postgres na Wyse 5070](docs/postgres.md): baza poza klastrem, użytkownik + schema per aplikacja
+- [Statistics](docs/statistics.md): wdrożenie statistics-service i statistics-ui
+
 ## Do podbicia
 
 - Istio `1.30.x` → `1.31.x`, gdy 1.31 wyjdzie z RC (`infrastructure/istio.yaml`).
