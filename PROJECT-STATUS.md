@@ -14,6 +14,11 @@
 - Panele UI (`docs/ui.md`): Headlamp i Capacitor lokalnie z kubeconfigiem; Kiali + Prometheus (tylko server, emptyDir, 2d) w `istio-system` przez `infrastructure/kiali.yaml`, dostęp port-forwardem.
 - Weryfikacja: `terraform validate` i `fmt` w obu katalogach, `kustomize build`, `helm template` chartów Istio z użytymi values. Na żywym klastrze nic nie było jeszcze uruchamiane.
 
+## Zrobione (2026-10-30)
+
+- `apps/nats/`: NATS 2.15.x z JetStream (Helm, 1 replika na RPi5, PVC `local-path` 2 Gi, 256 Mi RAM, UID 10001, read-only FS), użytkownicy `statistics-service` i `collector` z hasłami z Secret `nats-auth`, AuthorizationPolicy tylko z `statistics-service` na 4222, bez HTTPRoute. Opis: `docs/nats.md`.
+- Weryfikacja: `helm template` z values, `nats-server -t` na wyrenderowanym konfigu, serwer w Dockerze (UID 10001, read-only) + nats-box: stream/consumer/ack jako `statistics-service`, publish jako `collector`, odmowy (subskrypcja `stats.ingest.>` i `_INBOX.>`, `$JS.API`, anonim, złe hasło), kubeconform jak w CI.
+
 ## Decyzje
 
 - Terraform robi tylko maszyny i bootstrap. Wszystko w klastrze idzie przez GitOps (Flux), co omija problem CRD przy planie Terraform i zgadza się z kontraktem („Git jako źródło prawdy”).
@@ -26,9 +31,11 @@
 - Wejścia jako zmienne środowiskowe: `homelab-infra/.env` (`TF_VAR_*`, poza gitem); IP Wyse trafia do klastra przez ConfigMap `cluster-vars` i `postBuild.substituteFrom` (bez IP w gicie). Aplikacje: `.devops/k8s/config.env` (jawny) + `secrets.sops.env` (SOPS dotenv) przez generatory kustomize.
 - UI: Headlamp/Capacitor lokalnie (zero zasobów w klastrze, bez wystawiania konsoli admina). Kiali `auth.strategy: anonymous`, bo bez HTTPRoute; Prometheus z domyślnymi jobami charta (adnotacje `prometheus.io/*` łapią ztunnel i istiod).
 - Gotowe aplikacje (Helm) żyją tutaj w `apps/<name>/`, aktualizacje przez zakres semver w HelmRelease (bez Renovate).
+- Kolejka: NATS JetStream bez kontrolera NACK, stream i consumer zakłada statistics-service. Bez reloadera (checksum konfigu robi rollout). Collector ma inbox `_INBOX_collector.>`, bo `_INBOX.>` pokazywałby mu wiadomości dostarczane do statistics-service. Backup na poziomie katalogu PVC (kolejka to bufor).
 
 ## Następne kroki
 
+- `apps/nats/secret.sops.yaml` (hasła NATS, `docs/nats.md`) po wpisaniu klucza age, przed wdrożeniem NATS; potem `NATS_USER`/`NATS_PASSWORD` i `BROKER=jetstream` w statistics-service.
 - CI `devops` w statistics-service jest czerwone, dopóki nie ma `secrets.sops.env` i prawdziwego klucza age w `.sops.yaml` (celowo).
 - Postawić całość według `docs/setup.md` (kroki 0–8): `.env`, klucz age w obu `.sops.yaml`, `secrets.sops.env` statistics-service, Postgres na Wyse, merge `feature-6` → `main` w obu repo aplikacji, paczki GHCR publiczne.
 - Podbić Istio do 1.31.x po GA.
