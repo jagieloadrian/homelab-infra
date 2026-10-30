@@ -11,6 +11,7 @@ Gdzie co leży. Stawianie krok po kroku: [setup.md](setup.md).
 | Konfiguracja | `.devops/k8s/config.env` → ConfigMap | brak |
 | Sekrety | `.devops/k8s/secrets.sops.env` (SOPS) → Secret | brak |
 | Baza | Postgres na Wyse, baza i schema `statistics` ([postgres.md](postgres.md)) | brak |
+| Kolejka | NATS JetStream `nats.apps.svc.cluster.local:4222` przy `BROKER=jetstream` ([nats.md](nats.md)) | brak |
 | Deploy | CI na `main`: obraz Jib → commit tagu do `.devops/k8s` | CI na `main`: obraz buildx → commit tagu do `.devops/k8s` |
 
 Rejestracje wskazują na `.devops/k8s`, nie na `.devops`. Obok w `.devops/` leżą pliki compose (`authelia-compose/`, `postgres-compose/`), których Flux nie może aplikować.

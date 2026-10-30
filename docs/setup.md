@@ -100,6 +100,8 @@ OIDC_CLIENT_SECRET=
 
 Sprawdź, że plik jest zaszyfrowany (`grep sops_version .devops/k8s/secrets.sops.env`), i zrób commit. Podgląd później: `sops -d .devops/k8s/secrets.sops.env`.
 
+Kolejka (`BROKER=jetstream`): najpierw hasła NATS w `homelab-infra/apps/nats/secret.sops.yaml`, potem `NATS_USER`/`NATS_PASSWORD` w tym pliku ([nats.md](nats.md)).
+
 ## 4. Postgres na Wyse
 
 Według [postgres.md](postgres.md):

@@ -11,6 +11,7 @@ Platforma z dokumentu „Homelab Platform Contract”: 2-node'owy k3s (RPi5 arm6
 | Własne aplikacje: lista, plik na aplikację | `clusters/home/apps/` | Flux (read-only z repo aplikacji) |
 | Manifesty własnych aplikacji | `.devops/` w repo aplikacji | Flux |
 | Gotowe aplikacje (Helm chart, bez budowania) | `apps/<name>/` | Flux |
+| NATS z JetStream: kolejka ingestu statistics-service | `apps/nats/` | Flux (Helm) |
 | Rejestracja aplikacji | `scripts/new-app.sh` | skrypt |
 
 ## Stawianie od zera
@@ -92,6 +93,7 @@ Przepływ: merge do `main` → CI buduje obraz `main-<ts>-<sha7>` → CI podbija
 - [Postgres na Wyse 5070](docs/postgres.md): baza poza klastrem, użytkownik + schema per aplikacja
 - [Statistics](docs/statistics.md): wdrożenie statistics-service i statistics-ui
 - [Panele UI](docs/ui.md): Headlamp i Capacitor lokalnie, Kiali przez port-forward
+- [NATS z JetStream](docs/nats.md): kolejka dla statistics-service, użytkownicy, hasła, test, backup
 
 ## Do podbicia
 
