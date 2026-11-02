@@ -1,24 +1,24 @@
 # Statistics: statistics-service + statistics-ui
 
-Gdzie co leży. Stawianie krok po kroku: [setup.md](setup.md).
+Where things live. Step-by-step setup: [setup.md](setup.md).
 
 | | statistics-service | statistics-ui |
 | --- | --- | --- |
 | Repo | `jagieloadrian/statistics-service` | `jagieloadrian/statistics-ui` |
-| Rejestracja tutaj | `clusters/home/apps/statistics-service.yaml` | `clusters/home/apps/statistics-ui.yaml` |
-| HelmRelease na `charts/app` (Flux czyta z `main`) | `.devops/helm/` | `.devops/helm/` |
+| Registration here | `clusters/home/apps/statistics-service.yaml` | `clusters/home/apps/statistics-ui.yaml` |
+| HelmRelease on `charts/app` (Flux reads from `main`) | `.devops/helm/` | `.devops/helm/` |
 | Routing | `statistics.home.arpa/api/` | `statistics.home.arpa/` |
-| Konfiguracja | `values.env` w `.devops/helm/release.yaml` → ConfigMap | brak |
-| Sekrety | `.devops/helm/secrets.sops.yaml` (SOPS, `secretEnv`) → Secret | brak |
-| Baza | Postgres na Wyse, baza i schema `statistics` ([postgres.md](postgres.md)) | brak |
-| Kolejka | NATS JetStream `nats.apps.svc.cluster.local:4222` przy `BROKER=jetstream` ([nats.md](nats.md)) | brak |
-| Deploy | CI na `main`: obraz Jib → commit tagu do `.devops/helm/release.yaml` | CI na `main`: obraz buildx → commit tagu do `.devops/helm/release.yaml` |
+| Configuration | `values.env` in `.devops/helm/release.yaml` → ConfigMap | none |
+| Secrets | `.devops/helm/secrets.sops.yaml` (SOPS, `secretEnv`) → Secret | none |
+| Database | Postgres on Wyse, database and schema `statistics` ([postgres.md](postgres.md)) | none |
+| Queue | NATS JetStream `nats.apps.svc.cluster.local:4222` with `BROKER=jetstream` ([nats.md](nats.md)) | none |
+| Deploy | CI on `main`: Jib image → tag commit to `.devops/helm/release.yaml` | CI on `main`: buildx image → tag commit to `.devops/helm/release.yaml` |
 
-Rejestracje wskazują na `.devops/helm`, nie na `.devops`. Obok w `.devops/` leżą pliki compose (`authelia-compose/`, `postgres-compose/`), których Flux nie może aplikować.
+Registrations point to `.devops/helm`, not `.devops`. Next to it in `.devops/` there are compose files (`authelia-compose/`, `postgres-compose/`), which Flux cannot apply.
 
-## Do zrobienia przed pierwszym deployem
+## Before the first deploy
 
-- [ ] Klucz age w `StatisticsService/.sops.yaml` ([setup.md](setup.md), krok 2)
-- [ ] `.devops/helm/secrets.sops.yaml` (krok 3). Bez niego Kustomization `statistics-service` się nie zbuduje.
-- [ ] Rola i schema `statistics` na Wyse (krok 4)
-- [ ] Merge `feature-6/cleaning-and-refactoring` → `main` w obu repo, paczki GHCR publiczne (krok 5)
+- [ ] Age key in `StatisticsService/.sops.yaml` ([setup.md](setup.md), step 2)
+- [ ] `.devops/helm/secrets.sops.yaml` (step 3). Without it the `statistics-service` Kustomization won't build.
+- [ ] Role and schema `statistics` on Wyse (step 4)
+- [ ] Merge `feature-6/cleaning-and-refactoring` → `main` in both repos, GHCR packages public (step 5)

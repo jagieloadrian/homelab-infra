@@ -1,48 +1,48 @@
 # PROJECT-STATUS
 
-## Zrobione (2026-10-28)
+## Done (2026-10-28)
 
-- `terraform/k3s`: instalacja k3s przez SSH. Server na RPi5 bez traefika, servicelb tylko na RPi. Agent na Wyse z `system-reserved` na pamięć. Wynik: `terraform/kubeconfig`.
-- `terraform/flux`: `flux_bootstrap_git` do tego repo (`clusters/home`) i Secret `sops-age`.
-- `infrastructure/`: Gateway API v1.6 CRDs, Istio ambient przez HelmReleases, Gateway `home-gateway`, namespace `apps` z labelem ambient.
+- `terraform/k3s`: k3s installation over SSH. Server on RPi5 without traefik, servicelb only on RPi. Agent on Wyse with `system-reserved` for memory. Output: `terraform/kubeconfig`.
+- `terraform/flux`: `flux_bootstrap_git` to this repo (`clusters/home`) and Secret `sops-age`.
+- `infrastructure/`: Gateway API v1.6 CRDs, Istio ambient via HelmReleases, Gateway `home-gateway`, namespace `apps` with the ambient label.
 - `clusters/home/platform.yaml`: Kustomization `infrastructure`.
-- `clusters/home/apps/`: lista aplikacji, plik na aplikację (`_app.yaml.example`): GitRepository (read-only, tylko `.devops/`) + Kustomization (`targetNamespace: apps`, SOPS).
-- `apps/<name>/`: gotowe aplikacje z Helm charta (Kustomization `apps`, `targetNamespace: apps`, SOPS), szablon `apps/_template/release.yaml.tpl`.
-- `scripts/new-app.sh`: `own <name>` (rejestracja `.devops/`) i `helm <name> <repo> <chart> <wersja> [port]` (HelmRepository http/OCI, HelmRelease, HTTPRoute, AuthorizationPolicy). Przetestowany na Authelia i podinfo (OCI).
-- Dokument kontraktu zaktualizowany: `.devops/`, CI commituje tag, rejestracja skryptem, sekcja „Gotowe aplikacje”, nowy diagram CI/CD, Istio 1.30.
-- CI (GitHub Actions): `homelab-infra/.github/workflows/validate.yml` (terraform fmt/validate obu katalogów, kubeconform z katalogiem CRD na `kustomize build infrastructure`, `clusters/home`, `apps/`, tylko znane zmienne Flux, shellcheck + smoke `new-app.sh`, pliki `*.sops.*` zaszyfrowane, brak `.env` w gicie, klucz age). W repo aplikacji `devops.yml`: kustomize build + kubeconform `.devops/k8s`, w statistics-service dodatkowo format `config.env`, brak sekretów w nim, `secrets.sops.env` zaszyfrowany z kompletem kluczy.
-- Panele UI (`docs/ui.md`): Headlamp i Capacitor lokalnie z kubeconfigiem; Kiali + Prometheus (tylko server, emptyDir, 2d) w `istio-system` przez `infrastructure/kiali.yaml`, dostęp port-forwardem.
-- Weryfikacja: `terraform validate` i `fmt` w obu katalogach, `kustomize build`, `helm template` chartów Istio z użytymi values. Na żywym klastrze nic nie było jeszcze uruchamiane.
+- `clusters/home/apps/`: app list, one file per app (`_app.yaml.example`): GitRepository (read-only, only `.devops/`) + Kustomization (`targetNamespace: apps`, SOPS).
+- `apps/<name>/`: ready-made apps from a Helm chart (Kustomization `apps`, `targetNamespace: apps`, SOPS), template `apps/_template/release.yaml.tpl`.
+- `scripts/new-app.sh`: `own <name>` (`.devops/` registration) and `helm <name> <repo> <chart> <version> [port]` (HelmRepository http/OCI, HelmRelease, HTTPRoute, AuthorizationPolicy). Tested on Authelia and podinfo (OCI).
+- Contract document updated: `.devops/`, CI commits the tag, registration via script, "Ready-made apps" section, new CI/CD diagram, Istio 1.30.
+- CI (GitHub Actions): `homelab-infra/.github/workflows/validate.yml` (terraform fmt/validate of both directories, kubeconform with a CRD catalog on `kustomize build infrastructure`, `clusters/home`, `apps/`, only known Flux variables, shellcheck + smoke `new-app.sh`, `*.sops.*` files encrypted, no `.env` in git, age key). In the app repos `devops.yml`: kustomize build + kubeconform `.devops/k8s`, in statistics-service additionally `config.env` format, no secrets in it, `secrets.sops.env` encrypted with the full set of keys.
+- UI panels (`docs/ui.md`): Headlamp and Capacitor locally with the kubeconfig; Kiali + Prometheus (server only, emptyDir, 2d) in `istio-system` via `infrastructure/kiali.yaml`, access via port-forward.
+- Verification: `terraform validate` and `fmt` in both directories, `kustomize build`, `helm template` of the Istio charts with the values used. Nothing has been run on a live cluster yet.
 
-## Zrobione (2026-10-30)
+## Done (2026-10-30)
 
-- `apps/nats/`: NATS 2.15.x z JetStream (Helm, 1 replika na RPi5, PVC `local-path` 2 Gi, 256 Mi RAM, UID 10001, read-only FS), użytkownicy `statistics-service` i `collector` z hasłami z Secret `nats-auth`, AuthorizationPolicy tylko z `statistics-service` na 4222, bez HTTPRoute. Opis: `docs/nats.md`.
-- Weryfikacja: `helm template` z values, `nats-server -t` na wyrenderowanym konfigu, serwer w Dockerze (UID 10001, read-only) + nats-box: stream/consumer/ack jako `statistics-service`, publish jako `collector`, odmowy (subskrypcja `stats.ingest.>` i `_INBOX.>`, `$JS.API`, anonim, złe hasło), kubeconform jak w CI.
-- Helm dla własnych aplikacji (2026-11-02): wspólny chart `charts/app` (kontrakt: SA, Deployment, Service, HTTPRoute, AuthorizationPolicy, ConfigMap/Secret z env, rollout przez `checksum/env`). Repo aplikacji mają tylko `.devops/helm/release.yaml` (HelmRelease, values inline, tag podbija CI) i opcjonalnie `secrets.sops.yaml` (`secretEnv`) przez secretGenerator + `valuesFrom`. Przeniesione: statistics-service, statistics-ui, mon-home-ass; mon-home-ass zarejestrowany (prywatne repo, `secretRef: flux-system`). CI: lint + kubeconform chartu tutaj, `helm template` w `devops.yml` aplikacji. Poprawiony krok CI `xargs kc` (funkcja basha, padał od `apps/nats`).
+- `apps/nats/`: NATS 2.15.x with JetStream (Helm, 1 replica on RPi5, PVC `local-path` 2 Gi, 256 Mi RAM, UID 10001, read-only FS), users `statistics-service` and `collector` with passwords from Secret `nats-auth`, AuthorizationPolicy only from `statistics-service` on 4222, no HTTPRoute. Description: `docs/nats.md`.
+- Verification: `helm template` with values, `nats-server -t` on the rendered config, server in Docker (UID 10001, read-only) + nats-box: stream/consumer/ack as `statistics-service`, publish as `collector`, denials (subscription `stats.ingest.>` and `_INBOX.>`, `$JS.API`, anonymous, wrong password), kubeconform as in CI.
+- Helm for own apps (2026-11-02): shared chart `charts/app` (contract: SA, Deployment, Service, HTTPRoute, AuthorizationPolicy, ConfigMap/Secret from env, rollout via `checksum/env`). App repos have only `.devops/helm/release.yaml` (HelmRelease, values inline, tag bumped by CI) and optionally `secrets.sops.yaml` (`secretEnv`) via secretGenerator + `valuesFrom`. Migrated: statistics-service, statistics-ui, mon-home-ass; mon-home-ass registered (private repo, `secretRef: flux-system`). CI: lint + kubeconform of the chart here, `helm template` in the apps' `devops.yml`. Fixed CI step `xargs kc` (bash function, had been failing since `apps/nats`).
 
-## Decyzje
+## Decisions
 
-- Terraform robi tylko maszyny i bootstrap. Wszystko w klastrze idzie przez GitOps (Flux), co omija problem CRD przy planie Terraform i zgadza się z kontraktem („Git jako źródło prawdy”).
-- Dwa katalogi Terraform, bo provider k8s/flux potrzebuje kubeconfiga, który powstaje dopiero w etapie k3s.
-- Flux uwierzytelnia się fine-grained PAT-em po HTTPS zamiast deploy key: jeden provider mniej.
-- Istio `1.30.x`, bo 1.31 jest w Helm repo tylko jako RC (kontrakt zakłada 1.31).
-- Repo Flux to `homelab-infra`, a kontrakt mówi o `homelab`.
-- Manifesty i sekrety (SOPS) w `.devops/` repo aplikacji, nie tutaj. CI podbija tag w `.devops/` commitem z `GITHUB_TOKEN`, więc Flux tylko czyta. Bez image automation (kontrakt zaktualizowany).
-- Baza: istniejący Postgres na hoście Wyse (poza k3s), baza `statistics`, użytkownik + schema per aplikacja, w klastrze Service bez selektora + EndpointSlice (`docs/postgres.md`). Bez CNPG i bez Postgresa w klastrze.
-- Wejścia jako zmienne środowiskowe: `homelab-infra/.env` (`TF_VAR_*`, poza gitem); IP Wyse trafia do klastra przez ConfigMap `cluster-vars` i `postBuild.substituteFrom` (bez IP w gicie). Aplikacje: `.devops/k8s/config.env` (jawny) + `secrets.sops.env` (SOPS dotenv) przez generatory kustomize.
-- UI: Headlamp/Capacitor lokalnie (zero zasobów w klastrze, bez wystawiania konsoli admina). Kiali `auth.strategy: anonymous`, bo bez HTTPRoute; Prometheus z domyślnymi jobami charta (adnotacje `prometheus.io/*` łapią ztunnel i istiod).
-- Gotowe aplikacje (Helm) żyją tutaj w `apps/<name>/`, aktualizacje przez zakres semver w HelmRelease (bez Renovate).
-- Kolejka: NATS JetStream bez kontrolera NACK, stream i consumer zakłada statistics-service. Bez reloadera (checksum konfigu robi rollout). Collector ma inbox `_INBOX_collector.>`, bo `_INBOX.>` pokazywałby mu wiadomości dostarczane do statistics-service. Backup na poziomie katalogu PVC (kolejka to bufor).
-- Jeden chart zamiast kopii manifestów w każdym repo: wszystkie trzy aplikacje miały identyczny kształt. Chart idzie z GitRepository `flux-system` (`reconcileStrategy: Revision`), bez publikacji do OCI. Sekrety jako zaszyfrowane values Helma (Flux odszyfrowuje pliki `.yaml` w secretGenerator), konfiguracja jawna inline w HelmRelease zamiast `config.env`.
+- Terraform only does the machines and the bootstrap. Everything in the cluster goes through GitOps (Flux), which avoids the CRD problem in the Terraform plan and matches the contract ("Git as the source of truth").
+- Two Terraform directories, because the k8s/flux provider needs a kubeconfig that only comes into existence in the k3s stage.
+- Flux authenticates with a fine-grained PAT over HTTPS instead of a deploy key: one provider fewer.
+- Istio `1.30.x`, because 1.31 is in the Helm repo only as RC (the contract assumes 1.31).
+- The Flux repo is `homelab-infra`, while the contract says `homelab`.
+- Manifests and secrets (SOPS) in `.devops/` of the app repo, not here. CI bumps the tag in `.devops/` with a commit using `GITHUB_TOKEN`, so Flux only reads. No image automation (contract updated).
+- Database: existing Postgres on the Wyse host (outside k3s), database `statistics`, user + schema per app, in the cluster a Service without a selector + EndpointSlice (`docs/postgres.md`). No CNPG and no Postgres in the cluster.
+- Inputs as environment variables: `homelab-infra/.env` (`TF_VAR_*`, outside git); the Wyse IP reaches the cluster via ConfigMap `cluster-vars` and `postBuild.substituteFrom` (no IP in git). Apps: `.devops/k8s/config.env` (plain) + `secrets.sops.env` (SOPS dotenv) via kustomize generators.
+- UI: Headlamp/Capacitor locally (zero resources in the cluster, no exposing the admin console). Kiali `auth.strategy: anonymous`, because there is no HTTPRoute; Prometheus with the chart's default jobs (`prometheus.io/*` annotations catch ztunnel and istiod).
+- Ready-made apps (Helm) live here in `apps/<name>/`, updates via the semver range in the HelmRelease (no Renovate).
+- Queue: NATS JetStream without the NACK controller, statistics-service creates the stream and consumer. No reloader (config checksum triggers the rollout). Collector has the inbox `_INBOX_collector.>`, because `_INBOX.>` would show it messages delivered to statistics-service. Backup at the PVC directory level (the queue is a buffer).
+- One chart instead of copies of manifests in every repo: all three apps had an identical shape. The chart comes from GitRepository `flux-system` (`reconcileStrategy: Revision`), no publishing to OCI. Secrets as encrypted Helm values (Flux decrypts `.yaml` files in secretGenerator), plain config inline in the HelmRelease instead of `config.env`.
 
-## Następne kroki
+## Next steps
 
-- PAT Fluxa (`TF_VAR_github_token`) musi mieć Contents: read na `mon-home-ass` (prywatne); merge `feature-4` → `main` w mon-home-ass, `secrets.sops.yaml` z `DB_PASSWORD`.
-- Pierwsze uruchomienie na klastrze: sprawdzić HelmRelease `statistics-*`, `mon-home-ass` (`flux get hr -n apps`).
-- `apps/nats/secret.sops.yaml` (hasła NATS, `docs/nats.md`) po wpisaniu klucza age, przed wdrożeniem NATS; potem `NATS_USER`/`NATS_PASSWORD` i `BROKER=jetstream` w statistics-service.
-- CI `devops` w statistics-service jest czerwone, dopóki nie ma `secrets.sops.env` i prawdziwego klucza age w `.sops.yaml` (celowo).
-- Postawić całość według `docs/setup.md` (kroki 0–8): `.env`, klucz age w obu `.sops.yaml`, `secrets.sops.env` statistics-service, Postgres na Wyse, merge `feature-6` → `main` w obu repo aplikacji, paczki GHCR publiczne.
-- Podbić Istio do 1.31.x po GA.
-- Kiali: przed HTTPRoute przełączyć na `openid` przez Authelię; waypoint w `apps` dla metryk L7.
-- Authelia: values (`pod.kind: Deployment`, storage, OIDC), potem forward-auth przez `extensionProviders` w istiod.
-- Opcjonalnie: Renovate (major bumpy chartów), notyfikacje Flux, Secret `ghcr-pull` dla prywatnych obrazów, pierwsza aplikacja (`hello`).
+- Flux PAT (`TF_VAR_github_token`) must have Contents: read on `mon-home-ass` (private); merge `feature-4` → `main` in mon-home-ass, `secrets.sops.yaml` with `DB_PASSWORD`.
+- First run on the cluster: check HelmRelease `statistics-*`, `mon-home-ass` (`flux get hr -n apps`).
+- `apps/nats/secret.sops.yaml` (NATS passwords, `docs/nats.md`) after the age key is filled in, before deploying NATS; then `NATS_USER`/`NATS_PASSWORD` and `BROKER=jetstream` in statistics-service.
+- CI `devops` in statistics-service is red until there is a `secrets.sops.env` and a real age key in `.sops.yaml` (on purpose).
+- Bring up the whole thing per `docs/setup.md` (steps 0–8): `.env`, age key in both `.sops.yaml`, `secrets.sops.env` of statistics-service, Postgres on Wyse, merge `feature-6` → `main` in both app repos, GHCR packages public.
+- Bump Istio to 1.31.x after GA.
+- Kiali: before HTTPRoute switch to `openid` via Authelia; waypoint in `apps` for L7 metrics.
+- Authelia: values (`pod.kind: Deployment`, storage, OIDC), then forward-auth via `extensionProviders` in istiod.
+- Optional: Renovate (major chart bumps), Flux notifications, Secret `ghcr-pull` for private images, first app (`hello`).

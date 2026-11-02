@@ -1,71 +1,71 @@
-# Postgres na Wyse 5070
+# Postgres on Wyse 5070
 
-Aplikacje w k3s korzystają z Postgresa działającego na hoście Wyse, poza klastrem. Jedna baza `statistics`, dla każdej aplikacji osobny użytkownik i schema. W klastrze Postgres jest widoczny jako `postgres.apps.svc.cluster.local:5432`, a IP Wyse jest wpisane tylko w jednym miejscu.
+Applications in k3s use Postgres running on the Wyse host, outside the cluster. One `statistics` database, a separate user and schema for each application. In the cluster Postgres is visible as `postgres.apps.svc.cluster.local:5432`, and the Wyse IP is set in only one place.
 
-## Raz: Postgres na Wyse
+## Once: Postgres on Wyse
 
-1. `postgresql.conf` (zmiana wymaga restartu Postgresa):
+1. `postgresql.conf` (a change requires a Postgres restart):
    ```
-   listen_addresses = 'localhost,<IP Wyse>'
+   listen_addresses = 'localhost,<Wyse IP>'
    ```
-2. `pg_hba.conf` (wystarczy `SELECT pg_reload_conf();`):
+2. `pg_hba.conf` (`SELECT pg_reload_conf();` is enough):
    ```
-   host  statistics  all  10.42.0.0/16    scram-sha-256   # pody (domyślny CIDR k3s), m.in. te z Wyse
-   host  statistics  all  <IP RPi5>/32    scram-sha-256   # pody z RPi5 wychodzą z IP noda (masquerade flannela)
+   host  statistics  all  10.42.0.0/16    scram-sha-256   # pods (default k3s CIDR), incl. those on Wyse
+   host  statistics  all  <RPi5 IP>/32    scram-sha-256   # pods on RPi5 go out with the node IP (flannel masquerade)
    ```
-   Postgres w Dockerze: opublikuj port `5432:5432`. Sprawdź w logach (`log_connections = on`), z jakiego IP przychodzą połączenia: przy proxy Dockera bywa to brama sieci Dockera. Firewall na Wyse (np. `ufw`) musi przepuszczać 5432 z tych samych adresów.
-3. Baza:
+   Postgres in Docker: publish port `5432:5432`. Check in the logs (`log_connections = on`) which IP the connections come from: with the Docker proxy it is sometimes the Docker network gateway. The firewall on Wyse (e.g. `ufw`) must allow 5432 from the same addresses.
+3. Database:
    ```sql
    CREATE DATABASE statistics;
    REVOKE ALL ON DATABASE statistics FROM PUBLIC;
    \c statistics
-   REVOKE CREATE ON SCHEMA public FROM PUBLIC;   -- Postgres < 15 pozwala na to domyślnie
+   REVOKE CREATE ON SCHEMA public FROM PUBLIC;   -- Postgres < 15 allows this by default
    ```
-4. RAM: Postgres i Home Assistant zużywają pamięć spoza puli kubeleta. `wyse_system_reserved_memory` w `terraform/k3s` (domyślnie `4Gi`) musi pokryć oba. Więcej rezerwy oznacza mniej niż ok. 3.4 GiB dla podów.
+4. RAM: Postgres and Home Assistant use memory outside the kubelet pool. `wyse_system_reserved_memory` in `terraform/k3s` (default `4Gi`) must cover both. More reserve means less than approx. 3.4 GiB for pods.
 
-## Adres w klastrze (już w repo)
+## Address in the cluster (already in the repo)
 
-`infrastructure/postgres.yaml` to Service `postgres` bez selektora i EndpointSlice z adresem `${WYSE_IP}`. Flux podstawia ten adres z ConfigMap `flux-system/cluster-vars`, którą `terraform/flux` tworzy z `TF_VAR_wyse_host` w `.env` ([setup.md](setup.md), krok 1). Zmiana IP to zmiana w `.env` i ponowny `terraform apply` w `terraform/flux`.
+`infrastructure/postgres.yaml` is a Service `postgres` without a selector and an EndpointSlice with address `${WYSE_IP}`. Flux substitutes this address from ConfigMap `flux-system/cluster-vars`, which `terraform/flux` creates from `TF_VAR_wyse_host` in `.env` ([setup.md](setup.md), step 1). Changing the IP means changing `.env` and re-running `terraform apply` in `terraform/flux`.
 
-Mesh (ambient) przepuszcza ruch do celu spoza meshu jako zwykłe TCP. AuthorizationPolicy go nie obejmuje, a granicą między aplikacjami są użytkownicy Postgresa.
+The mesh (ambient) passes traffic to a destination outside the mesh as plain TCP. AuthorizationPolicy does not cover it, and the boundary between applications is the Postgres users.
 
-## Każda aplikacja: użytkownik i schema
+## Each application: user and schema
 
-Nazwy ról i schem bez myślników (np. `statistics`), wtedy nie trzeba ich cytować w SQL.
+Role and schema names without hyphens (e.g. `statistics`), so they do not need quoting in SQL.
 
 ```bash
-openssl rand -hex 24                          # hasło
-ssh wyse sudo -u postgres psql -d statistics     # Docker: ssh wyse docker exec -it <kontener> psql -U postgres -d statistics
+openssl rand -hex 24                          # password
+ssh wyse sudo -u postgres psql -d statistics     # Docker: ssh wyse docker exec -it <container> psql -U postgres -d statistics
 ```
 
 ```sql
-CREATE ROLE <app> LOGIN PASSWORD '<hasło>';
+CREATE ROLE <app> LOGIN PASSWORD '<password>';
 GRANT CONNECT ON DATABASE statistics TO <app>;
 CREATE SCHEMA <app> AUTHORIZATION <app>;
 ALTER ROLE <app> IN DATABASE statistics SET search_path = <app>;
 ```
 
-Schema należy do aplikacji, więc inne role jej nie widzą bez osobnego `GRANT`.
+The schema belongs to the application, so other roles cannot see it without a separate `GRANT`.
 
-Test z klastra:
+Test from the cluster:
 
 ```bash
 kubectl -n apps run psql --rm -it --restart=Never --image=postgres:16 -- \
   psql "postgresql://<app>@postgres.apps.svc.cluster.local:5432/statistics" -c 'show search_path'
 ```
 
-## Po stronie aplikacji
+## Application side
 
 - URL: `jdbc:postgresql://postgres.apps.svc.cluster.local:5432/statistics?currentSchema=<app>`.
-- Hasło w `.devops/helm/secrets.sops.yaml` repo aplikacji (SOPS, `secretEnv`), nigdy w `values.env` w `release.yaml` ([setup.md](setup.md), krok 1).
-- Flyway bez dodatkowej konfiguracji używa pierwszej schemy z `search_path`, więc migracje i `flyway_schema_history` lądują w schemie aplikacji.
+- Password in `.devops/helm/secrets.sops.yaml` of the application repo (SOPS, `secretEnv`), never in `values.env` in `release.yaml` ([setup.md](setup.md), step 1).
+- Flyway without extra configuration uses the first schema from `search_path`, so migrations and `flyway_schema_history` land in the application's schema.
 
 ## Backup
 
-Backup robisz na hoście Wyse, poza klastrem. Kontrakt wymaga, żeby był opisany. Przykład `/etc/cron.d/postgres-backup`:
+You make the backup on the Wyse host, outside the cluster. The contract requires it to be documented. Example `/etc/cron.d/postgres-backup`:
 
 ```
 0 3 * * * postgres pg_dump -d statistics -Fc -f /srv/backup/postgres/statistics-$(date +\%F).dump && find /srv/backup/postgres -name '*.dump' -mtime +14 -delete
 ```
 
-Pojedyncza aplikacja: `pg_dump -n <app>`. Kopię trzeba wynieść poza Wyse (RPi5, NAS, chmura), bo inaczej padnięcie dysku zabiera bazę razem z backupem.
+Single application: `pg_dump -n <app>`. The copy has to be moved off Wyse (RPi5, NAS, cloud), otherwise a disk failure takes the database together with the backup.
