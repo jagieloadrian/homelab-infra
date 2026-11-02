@@ -45,14 +45,14 @@ jobs:
 
       - name: Kubernetes manifests
         run: |
-          kc() { kubeconform -strict -summary -ignore-filename-pattern 'kustomization\.yaml$' -ignore-filename-pattern '\.sops\.yaml$' -schema-location default -schema-location "$K8S_SCHEMAS" -schema-location "$CRD_SCHEMAS" "$@"; }
+          kc() { kubeconform -strict -summary -ignore-filename-pattern 'kustomization\.yaml$' -schema-location default -schema-location "$K8S_SCHEMAS" -schema-location "$CRD_SCHEMAS" "$@"; }
           kustomize build infrastructure | kc -   # CRD Gateway API, Istio, Gateway, Postgres Service
           kc clusters/home                        # Flux Kustomizations, rejestracje aplikacji
           kc apps                                 # gotowe aplikacje (Helm)
 
       - name: Chart charts/app (własne aplikacje)
         run: |
-          set -- --set image=ghcr.io/ci/ci:ci --set route.hostname=ci.home.arpa --set env.A=a --set secretEnv.B=b
+          set -- --set image=ghcr.io/ci/ci:ci --set route.hostname=ci.home.arpa --set env.A=a --set secrets=true
           helm lint --strict charts/app "$@"
           helm template ci charts/app "$@" | kubeconform -strict -summary -schema-location default -schema-location "$CRD_SCHEMAS" -
 
@@ -76,22 +76,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: SOPS files are encrypted
+      - name: No Secret manifests in git
         run: |
-          fail=0
-          for f in $(git ls-files | grep -E '[^/]\.sops\.(yaml|yml|json|env)$'); do  # bez samych .sops.yaml (konfig SOPS)
-            grep -qE '^sops:|^sops_version=|"sops":' "$f" || { echo "::error file=$f::plik nie jest zaszyfrowany SOPS"; fail=1; }
-          done
-          exit $fail
+          # sekrety tylko w Vault (docs/vault.md); w gicie ExternalSecret, nigdy Secret, nawet zaszyfrowany
+          bad=$(git ls-files '*.yaml' '*.yml' '*.tpl' | xargs grep -lE '^kind: Secret$' || true)
+          [ -z "$bad" ] || { echo "::error::kind: Secret w repo: $bad (wpisz do Vault, docs/vault.md)"; exit 1; }
 
       - name: No .env in git
         run: |
           if git ls-files | grep -E '(^|/)\.env$'; then echo "::error::.env jest w repo (ma zostać lokalnie, docs/setup.md krok 1)"; exit 1; fi
-
-      - name: Age key in .sops.yaml
-        run: |
-          if grep -q REPLACE_WITH .sops.yaml; then
-            # błąd dopiero gdy są pliki do odszyfrowania; sam placeholder to ostrzeżenie
-            if git ls-files | grep -qE '[^/]\.sops\.(yaml|yml|json|env)$'; then echo "::error file=.sops.yaml::brak klucza publicznego age (docs/setup.md, krok 2)"; exit 1; fi
-            echo "::warning file=.sops.yaml::brak klucza publicznego age (docs/setup.md, krok 2)"
-          fi

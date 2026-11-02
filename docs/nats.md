@@ -11,7 +11,7 @@ Queue for statistics-service ingest pub/sub (`BROKER=jetstream`). Ready-made app
 | Monitoring | `:8222` only in headless Service `nats-headless`; AuthorizationPolicy does not allow it, kubelet probes bypass ztunnel |
 | Runtime | UID 10001, read-only root FS, `drop: [ALL]`, `seccompProfile: RuntimeDefault`, ServiceAccount `nats` without a token |
 | RAM | 256 Mi (request = limit), `GOMEMLIMIT=200MiB`, no reloader sidecar. A few MiB at idle; more with a queue backlog (file store block cache) |
-| Secrets | Secret `nats-auth` from `apps/nats/secret.sops.yaml` (passwords as environment variables in `nats.conf`) |
+| Secrets | Secret `nats-auth` from Vault `secret/apps/nats` via ExternalSecret `nats-auth` (passwords as environment variables in `nats.conf`) |
 
 The `STATS_INGEST` stream (subjects `stats.ingest.>`, file storage) and the durable pull consumer `statistics-service` are created by the application itself at startup. The JetStream controller (NACK) is not needed.
 
@@ -32,23 +32,14 @@ Further collectors can share the `collector` user, because the source is identif
 
 Network (AuthorizationPolicy `nats`): port 4222 only from `cluster.local/ns/apps/sa/statistics-service`. Add a collector running in the cluster as `cluster.local/ns/apps/sa/<collector>` at the spot marked with a comment in `release.yaml`.
 
-## Secrets (once, before the first deployment)
+## Secrets (once)
 
-Requires the age key in `.sops.yaml` ([setup.md](setup.md), step 2).
+Requires a configured Vault ([vault.md](vault.md), steps 1–3; [setup.md](setup.md), step 6).
 
 ```bash
-cd ~/IdeaProjects/homelab-infra
-cat > apps/nats/secret.sops.yaml <<EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: nats-auth
-stringData:
-  STATS_SERVICE_PASSWORD: $(openssl rand -hex 24)
-  COLLECTOR_PASSWORD: $(openssl rand -hex 24)
-EOF
-sops -e -i apps/nats/secret.sops.yaml
-grep -q '^sops:' apps/nats/secret.sops.yaml && git add apps/nats/secret.sops.yaml
+vault kv put secret/apps/nats \
+  STATS_SERVICE_PASSWORD=$(openssl rand -hex 24) \
+  COLLECTOR_PASSWORD=$(openssl rand -hex 24)
 ```
 
 NATS reads an environment variable like a value in the config, so the password cannot be just a number (e.g. `12345` → startup error). Hex from `openssl` contains letters.
@@ -56,13 +47,20 @@ NATS reads an environment variable like a value in the config, so the password c
 Reading the passwords:
 
 ```bash
-sops -d apps/nats/secret.sops.yaml
-sops -d --extract '["stringData"]["STATS_SERVICE_PASSWORD"]' apps/nats/secret.sops.yaml
+vault kv get secret/apps/nats
+vault kv get -field=STATS_SERVICE_PASSWORD secret/apps/nats
 ```
 
-Changing a password: `sops apps/nats/secret.sops.yaml`, push, then `kubectl -n apps rollout restart statefulset/nats` (a Secret change alone does not restart the pod) and the new password in the application.
+Changing a password: `vault kv patch secret/apps/nats COLLECTOR_PASSWORD=-`, then (a Secret change alone does not restart the pod):
 
-Without the Secret, pod `nats-0` is stuck in `CreateContainerConfigError`, and HelmRelease `nats` fails after 5 min. After adding the Secret: `flux reconcile helmrelease nats -n apps --force`.
+```bash
+kubectl -n apps annotate externalsecret nats-auth force-sync=$(date +%s) --overwrite
+kubectl -n apps rollout restart statefulset/nats
+```
+
+and the new password in the application (`STATS_SERVICE_PASSWORD`: statistics-service below).
+
+Without the keys in Vault, Secret `nats-auth` does not exist, pod `nats-0` is stuck in `CreateContainerConfigError`, and HelmRelease `nats` fails after 5 min. After adding the keys: `flux reconcile helmrelease nats -n apps --force`.
 
 ## statistics-service
 
@@ -71,13 +69,13 @@ Without the Secret, pod `nats-0` is stuck in `CreateContainerConfigError`, and H
 ```yaml
 BROKER: jetstream
 NATS_URL: nats://nats.apps.svc.cluster.local:4222
+NATS_USER: statistics-service
 ```
 
-`StatisticsService/.devops/helm/secrets.sops.yaml`, `secretEnv` (`sops .devops/helm/secrets.sops.yaml`):
+Vault `secret/apps/statistics-service`, `NATS_PASSWORD` must equal `STATS_SERVICE_PASSWORD` ([vault.md](vault.md), "Change takes effect"):
 
-```yaml
-NATS_USER: statistics-service
-NATS_PASSWORD: <STATS_SERVICE_PASSWORD from apps/nats/secret.sops.yaml>
+```bash
+vault kv patch secret/apps/statistics-service NATS_PASSWORD=$(vault kv get -field=STATS_SERVICE_PASSWORD secret/apps/nats)
 ```
 
 ## Test
@@ -92,8 +90,8 @@ In a second terminal (`nats` CLI; without installing: `docker run --rm -it --net
 
 ```bash
 export NATS_URL=nats://localhost:4222
-COLLECTOR_PASSWORD=$(sops -d --extract '["stringData"]["COLLECTOR_PASSWORD"]' apps/nats/secret.sops.yaml)
-STATS_PASSWORD=$(sops -d --extract '["stringData"]["STATS_SERVICE_PASSWORD"]' apps/nats/secret.sops.yaml)
+COLLECTOR_PASSWORD=$(vault kv get -field=COLLECTOR_PASSWORD secret/apps/nats)
+STATS_PASSWORD=$(vault kv get -field=STATS_SERVICE_PASSWORD secret/apps/nats)
 
 nats --user collector --password "$COLLECTOR_PASSWORD" \
   pub stats.ingest.<sourceId> --header "Authorization: Bearer <source token>" '<json>'

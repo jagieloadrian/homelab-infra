@@ -22,7 +22,8 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: __NAME__
-  # Sekrety jako values: apps/__NAME__/secret.sops.yaml (Secret __NAME__-values, klucz values.yaml)
+  # Sekrety jako values: Vault secret/apps/__NAME__ z kluczem values.yaml (docs/vault.md) + ExternalSecret
+  # __NAME__-values jak nats-auth w apps/nats/release.yaml (dataFrom.extract), potem:
   # valuesFrom:
   #   - kind: Secret
   #     name: __NAME__-values

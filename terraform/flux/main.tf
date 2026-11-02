@@ -1,4 +1,4 @@
-# Etap 2: bootstrap Flux do tego repo + klucz age dla SOPS (sekrety w .devops/ aplikacji).
+# Etap 2: bootstrap Flux do tego repo. Sekrety aplikacji są w Vault (docs/vault.md), nie w gicie ani w Terraformie.
 # Reszta platformy (Gateway API, Istio ambient, Gateway, namespace apps) to YAML w clusters/ i infrastructure/.
 
 terraform {
@@ -30,11 +30,6 @@ variable "github_token" {
   sensitive = true
 }
 
-variable "age_key_file" {
-  type    = string
-  default = "~/.config/sops/age/keys.txt"
-}
-
 variable "wyse_host" {
   type        = string
   description = "IP Wyse 5070 (Postgres poza klastrem), w manifestach infrastructure/ jako $${WYSE_IP}"
@@ -60,19 +55,6 @@ provider "flux" {
 
 resource "flux_bootstrap_git" "this" {
   path = "clusters/home"
-}
-
-resource "kubernetes_secret_v1" "sops_age" {
-  depends_on = [flux_bootstrap_git.this]
-
-  metadata {
-    name      = "sops-age"
-    namespace = "flux-system"
-  }
-
-  data = {
-    "age.agekey" = file(pathexpand(var.age_key_file))
-  }
 }
 
 # Zmienne z .env podstawiane przez Flux w infrastructure/ (postBuild.substituteFrom), bez IP w gicie.

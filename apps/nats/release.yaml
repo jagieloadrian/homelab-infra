@@ -38,7 +38,7 @@ spec:
           enabled: true
           maxSize: 32Mi
       merge:
-        # Hasła z Secret nats-auth (apps/nats/secret.sops.yaml) przez zmienne środowiskowe.
+        # Hasła z Secret nats-auth (ExternalSecret niżej, Vault secret/apps/nats) przez zmienne środowiskowe.
         # Brak no_auth_user = połączenie anonimowe odrzucone.
         authorization:
           users:
@@ -96,6 +96,23 @@ spec:
       enabled: false
     natsBox:
       enabled: false
+---
+# STATS_SERVICE_PASSWORD, COLLECTOR_PASSWORD z Vault (docs/nats.md). NATS czyta je tylko przy starcie:
+# po zmianie w Vault kubectl -n apps rollout restart statefulset/nats.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: nats-auth
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: vault
+  target:
+    name: nats-auth
+  dataFrom:
+    - extract:
+        key: apps/nats
 ---
 # Monitoring (8222) zostaje w środku: tylko port 4222 i tylko od wymienionych kont.
 apiVersion: security.istio.io/v1

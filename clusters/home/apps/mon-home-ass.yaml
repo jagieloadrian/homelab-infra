@@ -32,7 +32,3 @@ spec:
   sourceRef:
     kind: GitRepository
     name: mon-home-ass
-  decryption:
-    provider: sops
-    secretRef:
-      name: sops-age
