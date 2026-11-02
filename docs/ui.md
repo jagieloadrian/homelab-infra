@@ -1,38 +1,38 @@
-# Panele UI
+# UI panels
 
-Headlamp i Capacitor działają lokalnie na laptopie z kubeconfigiem, w klastrze nic nie stoi. Kiali musi działać w klastrze (`infrastructure/kiali.yaml`), ale nie ma HTTPRoute, więc wchodzi się do niego przez port-forward.
+Headlamp and Capacitor run locally on the laptop with the kubeconfig, nothing runs in the cluster. Kiali has to run in the cluster (`infrastructure/kiali.yaml`), but it has no HTTPRoute, so you reach it via port-forward.
 
 ```bash
 export KUBECONFIG=~/IdeaProjects/homelab-infra/terraform/kubeconfig
 ```
 
-## Headlamp: konsola klastra (jak OpenShift/GKE)
+## Headlamp: cluster console (like OpenShift/GKE)
 
-Workloady, logi, exec, zdarzenia, edycja YAML.
+Workloads, logs, exec, events, YAML editing.
 
 ```bash
-flatpak install flathub io.kinvolk.Headlamp   # albo AppImage z github.com/kubernetes-sigs/headlamp/releases
+flatpak install flathub io.kinvolk.Headlamp   # or AppImage from github.com/kubernetes-sigs/headlamp/releases
 ```
 
-Klaster wczytuje się z `KUBECONFIG`. Fluxa widać po doinstalowaniu wtyczki Flux (Plugin Catalog w aplikacji).
+The cluster is loaded from `KUBECONFIG`. Flux is visible after installing the Flux plugin (Plugin Catalog in the app).
 
-## Capacitor: UI do Fluxa
+## Capacitor: Flux UI
 
-Drzewo Kustomization/HelmRelease, historia Helma, diff między gitem a klastrem.
+Kustomization/HelmRelease tree, Helm history, diff between git and the cluster.
 
 ```bash
-brew install gimlet-io/capacitor/capacitor     # albo: wget -qO- https://gimlet.io/install-capacitor | bash
+brew install gimlet-io/capacitor/capacitor     # or: wget -qO- https://gimlet.io/install-capacitor | bash
 next --port 3333                               # http://localhost:3333
 ```
 
-## Kiali: mesh Istio
+## Kiali: Istio mesh
 
-Graf ruchu, zdrowie usług, walidacja konfiguracji Istio. Metryki bierze z Prometheusa w `istio-system` (bez dysku, 2 dni retencji, restart poda je czyści).
+Traffic graph, service health, Istio config validation. It takes metrics from Prometheus in `istio-system` (no disk, 2 days retention, a pod restart clears them).
 
 ```bash
 kubectl -n istio-system port-forward svc/kiali 20001   # http://localhost:20001
 ```
 
-Logowanie jest wyłączone (`auth.strategy: anonymous`), bo dostęp ma tylko ktoś, kto już może robić port-forward. Przed wystawieniem Kiali przez HTTPRoute trzeba przełączyć na `openid` przez Authelię.
+Login is disabled (`auth.strategy: anonymous`), because only someone who can already port-forward has access. Before exposing Kiali via HTTPRoute, switch to `openid` via Authelia.
 
-W ambient graf pokazuje ruch L4 (TCP) z ztunnela. Metryki L7 (HTTP: kody, latencje) pojawią się dopiero po dodaniu waypointa w namespace `apps`.
+In ambient, the graph shows L4 (TCP) traffic from ztunnel. L7 metrics (HTTP: codes, latencies) only appear after adding a waypoint in the `apps` namespace.
