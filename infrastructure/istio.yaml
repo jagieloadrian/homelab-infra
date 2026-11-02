@@ -12,7 +12,6 @@ spec:
   interval: 24h
   url: https://istio-release.storage.googleapis.com/charts
 ---
-# ponytail: 1.31 jest jeszcze w rc; podbić na 1.31.x po wydaniu GA (wszystkie 4 charty naraz).
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:

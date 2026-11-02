@@ -6,4 +6,3 @@
 *.tfvars
 terraform/kubeconfig
 .env
-*.agekey

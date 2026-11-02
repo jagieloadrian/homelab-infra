@@ -5,6 +5,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m
+  retryInterval: 1m
   timeout: 10m
   path: ./infrastructure
   prune: true
@@ -15,9 +16,8 @@ spec:
   postBuild:
     substituteFrom:
       - kind: ConfigMap
-        name: cluster-vars # tworzy terraform/flux z .env
+        name: cluster-vars
 ---
-# Gotowe aplikacje (Helm charty) z apps/<name>/ w tym repo.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
@@ -27,6 +27,7 @@ spec:
   dependsOn:
     - name: infrastructure
   interval: 10m
+  retryInterval: 1m
   path: ./apps
   prune: true
   targetNamespace: apps

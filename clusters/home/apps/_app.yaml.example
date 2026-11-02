@@ -1,12 +1,10 @@
-# Rejestracja aplikacji: cp _app.yaml.example <app>.yaml && sed -i 's/APP/<app>/g' <app>.yaml
-# Flux czyta (read-only) katalog .devops/helm/ (HelmRelease na charts/app) z repo aplikacji i wdraża go do namespace apps.
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:
   name: APP
   namespace: flux-system
 spec:
-  interval: 1m
+  interval: 24h
   url: https://github.com/jagieloadrian/APP
   ref:
     branch: main

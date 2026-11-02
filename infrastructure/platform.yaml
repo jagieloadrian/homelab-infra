@@ -10,7 +10,6 @@ metadata:
   labels:
     istio.io/dataplane-mode: ambient
 ---
-# Istio tworzy z tego Deployment + ServiceAccount home-gateway-istio i Service LoadBalancer (servicelb na RPi5).
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:

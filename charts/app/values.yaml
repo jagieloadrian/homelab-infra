@@ -1,15 +1,14 @@
-# Wymagane: image. Reszta to domyślne wartości kontraktu.
-image: ""            # ghcr.io/jagieloadrian/<app>:<tag>, tag podbija CI aplikacji (sed na "image: ")
-port: 8080           # port kontenera; probes: /health/live, /health/ready
+image: ""
+port: 8080
 resources:
   requests:
     cpu: 100m
     memory: 256Mi
   limits:
     memory: 256Mi
-tmpSize: 64Mi        # emptyDir na /tmp (root filesystem jest read-only)
-env: {}              # jawna konfiguracja -> ConfigMap <app>-config (envFrom)
-secrets: false       # true = Secret <app>-secrets z Vault secret/apps/<app> (ExternalSecret, envFrom), docs/vault.md
+tmpSize: 64Mi
+env: {}
+secrets: false
 route:
-  hostname: ""       # pusty = bez HTTPRoute
+  hostname: ""
   pathPrefix: /

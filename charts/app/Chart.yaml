@@ -1,5 +1,5 @@
 apiVersion: v2
 name: app
-description: Własna aplikacja homelaba wg kontraktu (ServiceAccount, Deployment, Service, HTTPRoute, AuthorizationPolicy).
+description: Own homelab app (ServiceAccount, Deployment, Service, HTTPRoute, AuthorizationPolicy).
 type: application
 version: 0.1.0

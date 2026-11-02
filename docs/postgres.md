@@ -1,6 +1,6 @@
 # Postgres on Wyse 5070
 
-Applications in k3s use Postgres running on the Wyse host, outside the cluster. One `statistics` database, a separate user and schema for each application. In the cluster Postgres is visible as `postgres.apps.svc.cluster.local:5432`, and the Wyse IP is set in only one place.
+Applications in k3s use Postgres running on the Wyse host, outside the cluster. Own apps share the `statistics` database, with a separate user and schema each. mon-home-ass reads Home Assistant's `home_assistant` database. In the cluster Postgres is visible as `postgres.apps.svc.cluster.local:5432`, and the Wyse IP is set in only one place.
 
 ## Once: Postgres on Wyse
 
@@ -10,17 +10,27 @@ Applications in k3s use Postgres running on the Wyse host, outside the cluster. 
    ```
 2. `pg_hba.conf` (`SELECT pg_reload_conf();` is enough):
    ```
-   host  statistics  all  10.42.0.0/16    scram-sha-256   # pods (default k3s CIDR), incl. those on Wyse
-   host  statistics  all  <RPi5 IP>/32    scram-sha-256   # pods on RPi5 go out with the node IP (flannel masquerade)
+   host  statistics  all  10.42.0.0/16    scram-sha-256
+   host  statistics  all  <RPi5 IP>/32    scram-sha-256
    ```
+   | Source | Why |
+   | --- | --- |
+   | `10.42.0.0/16` | pod IPs (default k3s pod CIDR), including pods on the Wyse |
+   | `<RPi5 IP>/32` | pods on the RPi5 leave the node with the RPi5 IP (flannel masquerade) |
+
    Postgres in Docker: publish port `5432:5432`. Check in the logs (`log_connections = on`) which IP the connections come from: with the Docker proxy it is sometimes the Docker network gateway. The firewall on Wyse (e.g. `ufw`) must allow 5432 from the same addresses.
-3. Database:
+3. Database. Open psql as the `postgres` superuser:
+   ```bash
+   ssh -t wyse sudo -u postgres psql
+   ```
+   Postgres in Docker: `ssh -t wyse docker exec -it <container> psql -U postgres`. Then run:
    ```sql
    CREATE DATABASE statistics;
    REVOKE ALL ON DATABASE statistics FROM PUBLIC;
    \c statistics
-   REVOKE CREATE ON SCHEMA public FROM PUBLIC;   -- Postgres < 15 allows this by default
+   REVOKE CREATE ON SCHEMA public FROM PUBLIC;
    ```
+   The last line matters for Postgres < 15, which lets every role create objects in `public` by default.
 4. RAM: Postgres and Home Assistant use memory outside the kubelet pool. `wyse_system_reserved_memory` in `terraform/k3s` (default `4Gi`) must cover both. More reserve means less than approx. 3.4 GiB for pods.
 
 ## Address in the cluster (already in the repo)
@@ -33,10 +43,19 @@ The mesh (ambient) passes traffic to a destination outside the mesh as plain TCP
 
 Role and schema names without hyphens (e.g. `statistics`), so they do not need quoting in SQL.
 
+Generate the role password. The output is the password: keep it for `CREATE ROLE` and for Vault (`DB_PASSWORD`).
+
 ```bash
-openssl rand -hex 24                          # password
-ssh wyse sudo -u postgres psql -d statistics     # Docker: ssh wyse docker exec -it <container> psql -U postgres -d statistics
+openssl rand -hex 24
 ```
+
+Open psql in the `statistics` database:
+
+```bash
+ssh -t wyse sudo -u postgres psql -d statistics
+```
+
+Postgres in Docker: `ssh -t wyse docker exec -it <container> psql -U postgres -d statistics`. Then run, with `<app>` and `<password>` filled in:
 
 ```sql
 CREATE ROLE <app> LOGIN PASSWORD '<password>';
@@ -60,9 +79,22 @@ kubectl -n apps run psql --rm -it --restart=Never --image=postgres:16 -- \
 - Password (the one from `CREATE ROLE`) in Vault `secret/apps/<application>` as `DB_PASSWORD`, e.g. `secret/apps/statistics-service` ([vault.md](vault.md)), never in `values.env` in `release.yaml`.
 - Flyway without extra configuration uses the first schema from `search_path`, so migrations and `flyway_schema_history` land in the application's schema.
 
+## Home Assistant database (mon-home-ass)
+
+mon-home-ass reads the Home Assistant recorder data. Home Assistant must write its recorder to the `home_assistant` database in this Postgres (`recorder:` → `db_url` in Home Assistant's `configuration.yaml`), not to its default SQLite file.
+
+The read-only role `mon_home_ass` and its grants: [mon-home-ass `.devops/README.md`](https://github.com/jagieloadrian/mon-home-ass/blob/main/.devops/README.md). Put its password in Vault `secret/apps/mon-home-ass` as `DB_PASSWORD`.
+
+`pg_hba.conf` needs two more lines, from the same two sources as above, then `SELECT pg_reload_conf();`:
+
+```
+host  home_assistant  mon_home_ass  10.42.0.0/16    scram-sha-256
+host  home_assistant  mon_home_ass  <RPi5 IP>/32    scram-sha-256
+```
+
 ## Backup
 
-You make the backup on the Wyse host, outside the cluster. The contract requires it to be documented. Example `/etc/cron.d/postgres-backup`:
+You make the backup on the Wyse host, outside the cluster. Example `/etc/cron.d/postgres-backup`:
 
 ```
 0 3 * * * postgres pg_dump -d statistics -Fc -f /srv/backup/postgres/statistics-$(date +\%F).dump && find /srv/backup/postgres -name '*.dump' -mtime +14 -delete
