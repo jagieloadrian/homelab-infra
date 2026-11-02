@@ -18,6 +18,7 @@
 
 - `apps/nats/`: NATS 2.15.x z JetStream (Helm, 1 replika na RPi5, PVC `local-path` 2 Gi, 256 Mi RAM, UID 10001, read-only FS), użytkownicy `statistics-service` i `collector` z hasłami z Secret `nats-auth`, AuthorizationPolicy tylko z `statistics-service` na 4222, bez HTTPRoute. Opis: `docs/nats.md`.
 - Weryfikacja: `helm template` z values, `nats-server -t` na wyrenderowanym konfigu, serwer w Dockerze (UID 10001, read-only) + nats-box: stream/consumer/ack jako `statistics-service`, publish jako `collector`, odmowy (subskrypcja `stats.ingest.>` i `_INBOX.>`, `$JS.API`, anonim, złe hasło), kubeconform jak w CI.
+- Helm dla własnych aplikacji (2026-11-02): wspólny chart `charts/app` (kontrakt: SA, Deployment, Service, HTTPRoute, AuthorizationPolicy, ConfigMap/Secret z env, rollout przez `checksum/env`). Repo aplikacji mają tylko `.devops/helm/release.yaml` (HelmRelease, values inline, tag podbija CI) i opcjonalnie `secrets.sops.yaml` (`secretEnv`) przez secretGenerator + `valuesFrom`. Przeniesione: statistics-service, statistics-ui, mon-home-ass; mon-home-ass zarejestrowany (prywatne repo, `secretRef: flux-system`). CI: lint + kubeconform chartu tutaj, `helm template` w `devops.yml` aplikacji. Poprawiony krok CI `xargs kc` (funkcja basha, padał od `apps/nats`).
 
 ## Decyzje
 
@@ -32,9 +33,12 @@
 - UI: Headlamp/Capacitor lokalnie (zero zasobów w klastrze, bez wystawiania konsoli admina). Kiali `auth.strategy: anonymous`, bo bez HTTPRoute; Prometheus z domyślnymi jobami charta (adnotacje `prometheus.io/*` łapią ztunnel i istiod).
 - Gotowe aplikacje (Helm) żyją tutaj w `apps/<name>/`, aktualizacje przez zakres semver w HelmRelease (bez Renovate).
 - Kolejka: NATS JetStream bez kontrolera NACK, stream i consumer zakłada statistics-service. Bez reloadera (checksum konfigu robi rollout). Collector ma inbox `_INBOX_collector.>`, bo `_INBOX.>` pokazywałby mu wiadomości dostarczane do statistics-service. Backup na poziomie katalogu PVC (kolejka to bufor).
+- Jeden chart zamiast kopii manifestów w każdym repo: wszystkie trzy aplikacje miały identyczny kształt. Chart idzie z GitRepository `flux-system` (`reconcileStrategy: Revision`), bez publikacji do OCI. Sekrety jako zaszyfrowane values Helma (Flux odszyfrowuje pliki `.yaml` w secretGenerator), konfiguracja jawna inline w HelmRelease zamiast `config.env`.
 
 ## Następne kroki
 
+- PAT Fluxa (`TF_VAR_github_token`) musi mieć Contents: read na `mon-home-ass` (prywatne); merge `feature-4` → `main` w mon-home-ass, `secrets.sops.yaml` z `DB_PASSWORD`.
+- Pierwsze uruchomienie na klastrze: sprawdzić HelmRelease `statistics-*`, `mon-home-ass` (`flux get hr -n apps`).
 - `apps/nats/secret.sops.yaml` (hasła NATS, `docs/nats.md`) po wpisaniu klucza age, przed wdrożeniem NATS; potem `NATS_USER`/`NATS_PASSWORD` i `BROKER=jetstream` w statistics-service.
 - CI `devops` w statistics-service jest czerwone, dopóki nie ma `secrets.sops.env` i prawdziwego klucza age w `.sops.yaml` (celowo).
 - Postawić całość według `docs/setup.md` (kroki 0–8): `.env`, klucz age w obu `.sops.yaml`, `secrets.sops.env` statistics-service, Postgres na Wyse, merge `feature-6` → `main` w obu repo aplikacji, paczki GHCR publiczne.
