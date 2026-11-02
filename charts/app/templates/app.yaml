@@ -23,7 +23,6 @@ data:
 {{- end }}
 {{- if .Values.secrets }}
 ---
-# Secret <app>-secrets tworzy External Secrets Operator z Vault: secret/apps/<app> (wszystkie klucze -> env).
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
@@ -65,8 +64,6 @@ spec:
         {{- $labels | nindent 8 }}
         app.kubernetes.io/version: {{ splitList ":" .Values.image | last | trunc 63 | quote }}
       annotations:
-        # zmiana env robi rollout (jak hash w nazwie z generatorów kustomize)
-        # ponytail: zmiana sekretu w Vault nie robi rolloutu: kubectl rollout restart (docs/vault.md); Reloader, jeśli to za mało.
         checksum/env: {{ .Values.env | toJson | sha256sum }}
     spec:
       serviceAccountName: {{ $name }}
@@ -174,7 +171,6 @@ spec:
           port: 80
 {{- end }}
 ---
-# Ruch tylko z home-gateway (ambient, ztunnel egzekwuje L4).
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
 metadata:

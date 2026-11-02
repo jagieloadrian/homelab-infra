@@ -83,7 +83,7 @@ vault kv patch secret/apps/statistics-service NATS_PASSWORD=$(vault kv get -fiel
 ```bash
 export KUBECONFIG=~/IdeaProjects/homelab-infra/terraform/kubeconfig
 kubectl -n apps get pods,pvc -l app.kubernetes.io/name=nats
-kubectl -n apps port-forward svc/nats 4222      # port-forward bypasses ztunnel and AuthorizationPolicy
+kubectl -n apps port-forward svc/nats 4222
 ```
 
 In a second terminal (`nats` CLI; without installing: `docker run --rm -it --network host natsio/nats-box nats ...`):
@@ -96,7 +96,7 @@ STATS_PASSWORD=$(vault kv get -field=STATS_SERVICE_PASSWORD secret/apps/nats)
 nats --user collector --password "$COLLECTOR_PASSWORD" \
   pub stats.ingest.<sourceId> --header "Authorization: Bearer <source token>" '<json>'
 nats --user statistics-service --password "$STATS_PASSWORD" stream info STATS_INGEST
-nats pub stats.ingest.x x                       # without password: Authorization Violation
+nats pub stats.ingest.x x
 ```
 
 Do not pull messages from the `statistics-service` consumer manually (`nats consumer next`), because you would take them away from the application. Whether they arrived shows in `stream info` (counters) and in the statistics-service logs.

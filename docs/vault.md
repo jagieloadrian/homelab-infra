@@ -24,7 +24,7 @@ It prints `Unseal Key 1` and `Initial Root Token`. Put both in a password manage
 ## 2. Unseal (after init and after every restart of the Vault pod)
 
 ```bash
-kubectl -n vault exec -it vault-0 -- vault operator unseal   # paste the unseal key
+kubectl -n vault exec -it vault-0 -- vault operator unseal
 ```
 
 While Vault is sealed, the Secrets already in the cluster keep working. ESO just can't create or refresh them.
@@ -32,9 +32,9 @@ While Vault is sealed, the Secrets already in the cluster keep working. ESO just
 ## 3. Configuration (once)
 
 ```bash
-kubectl -n vault port-forward svc/vault 8200 &   # UI: http://localhost:8200/ui
+kubectl -n vault port-forward svc/vault 8200 &
 export VAULT_ADDR=http://127.0.0.1:8200
-vault login                                      # root token from step 1
+vault login
 
 vault secrets enable -path=secret kv-v2
 vault auth enable kubernetes
@@ -61,8 +61,8 @@ The key names are the env variable names. Generate passwords with `openssl rand 
 | `secret/apps/nats` | `STATS_SERVICE_PASSWORD` (= `NATS_PASSWORD` of statistics-service), `COLLECTOR_PASSWORD` |
 
 ```bash
-vault kv put secret/apps/mon-home-ass DB_PASSWORD=-   # "-" reads the value from stdin, it stays out of shell history
-vault kv patch secret/apps/statistics-service ADMIN_PASSWORD=-   # change one key, keep the rest
+vault kv put secret/apps/mon-home-ass DB_PASSWORD=-
+vault kv patch secret/apps/statistics-service ADMIN_PASSWORD=-
 ```
 
 With several keys, the UI is easier (`secret/` → `apps/<app>` → JSON).
@@ -74,14 +74,14 @@ With several keys, the UI is easier (`secret/` → `apps/<app>` → JSON).
 ESO refreshes every hour, and the app reads env only at start:
 
 ```bash
-kubectl -n apps annotate externalsecret <app>-secrets force-sync=$(date +%s) --overwrite   # refresh now
-kubectl -n apps rollout restart deploy/<app>                                              # NATS: statefulset/nats
+kubectl -n apps annotate externalsecret <app>-secrets force-sync=$(date +%s) --overwrite
+kubectl -n apps rollout restart deploy/<app>
 ```
 
 ## Check
 
 ```bash
-kubectl -n apps get externalsecret   # STATUS SecretSynced, READY True
+kubectl -n apps get externalsecret
 ```
 
 `SecretSyncedError`: Vault is sealed (step 2), the key does not exist in Vault (step 4) or the role is missing (step 3). The details are in `kubectl -n apps describe externalsecret <app>-secrets`.

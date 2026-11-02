@@ -1,6 +1,3 @@
-# Etap 2: bootstrap Flux do tego repo. Sekrety aplikacji są w Vault (docs/vault.md), nie w gicie ani w Terraformie.
-# Reszta platformy (Gateway API, Istio ambient, Gateway, namespace apps) to YAML w clusters/ i infrastructure/.
-
 terraform {
   required_version = ">= 1.6"
   required_providers {
@@ -24,7 +21,6 @@ variable "github_repository" {
   default = "homelab-infra"
 }
 
-# Fine-grained PAT tylko na to repo, Contents: read & write (bootstrap commituje clusters/home/flux-system).
 variable "github_token" {
   type      = string
   sensitive = true
@@ -57,7 +53,6 @@ resource "flux_bootstrap_git" "this" {
   path = "clusters/home"
 }
 
-# Zmienne z .env podstawiane przez Flux w infrastructure/ (postBuild.substituteFrom), bez IP w gicie.
 resource "kubernetes_config_map_v1" "cluster_vars" {
   depends_on = [flux_bootstrap_git.this]
 

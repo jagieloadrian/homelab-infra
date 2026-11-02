@@ -1,5 +1,3 @@
-# Postgres na hoście Wyse (poza klastrem) jako postgres.apps.svc.cluster.local:5432 (docs/postgres.md).
-# ${WYSE_IP} podstawia Flux z ConfigMap cluster-vars (TF_VAR_wyse_host w .env).
 apiVersion: v1
 kind: Service
 metadata:

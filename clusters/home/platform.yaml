@@ -15,9 +15,8 @@ spec:
   postBuild:
     substituteFrom:
       - kind: ConfigMap
-        name: cluster-vars # tworzy terraform/flux z .env
+        name: cluster-vars
 ---
-# Gotowe aplikacje (Helm charty) z apps/<name>/ w tym repo.
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:

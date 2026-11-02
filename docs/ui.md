@@ -11,7 +11,7 @@ export KUBECONFIG=~/IdeaProjects/homelab-infra/terraform/kubeconfig
 Workloads, logs, exec, events, YAML editing.
 
 ```bash
-flatpak install flathub io.kinvolk.Headlamp   # or AppImage from github.com/kubernetes-sigs/headlamp/releases
+flatpak install flathub io.kinvolk.Headlamp
 ```
 
 The cluster is loaded from `KUBECONFIG`. Flux is visible after installing the Flux plugin (Plugin Catalog in the app).
@@ -21,8 +21,8 @@ The cluster is loaded from `KUBECONFIG`. Flux is visible after installing the Fl
 Kustomization/HelmRelease tree, Helm history, diff between git and the cluster.
 
 ```bash
-brew install gimlet-io/capacitor/capacitor     # or: wget -qO- https://gimlet.io/install-capacitor | bash
-next --port 3333                               # http://localhost:3333
+brew install gimlet-io/capacitor/capacitor
+next --port 3333
 ```
 
 ## Kiali: Istio mesh
@@ -30,7 +30,7 @@ next --port 3333                               # http://localhost:3333
 Traffic graph, service health, Istio config validation. It takes metrics from Prometheus in `istio-system` (no disk, 2 days retention, a pod restart clears them).
 
 ```bash
-kubectl -n istio-system port-forward svc/kiali 20001   # http://localhost:20001
+kubectl -n istio-system port-forward svc/kiali 20001
 ```
 
 Login is disabled (`auth.strategy: anonymous`), because only someone who can already port-forward has access. Before exposing Kiali via HTTPRoute, switch to `openid` via Authelia.

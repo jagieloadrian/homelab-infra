@@ -1,6 +1,3 @@
-# Etap 1: k3s na RPi5 (server) + Dell Wyse 5070 (agent) przez SSH.
-# Wynik: ../kubeconfig, którego używa etap terraform/flux.
-
 terraform {
   required_version = ">= 1.6"
   required_providers {
@@ -32,7 +29,6 @@ variable "k3s_channel" {
   default = "stable"
 }
 
-# ponytail: na Wyse 8 GB daje ok. 3.4 GiB allocatable dla podów (twardy limit cgroup kubepods); stroić pod realny RAM i zużycie HA.
 variable "wyse_system_reserved_memory" {
   type    = string
   default = "4Gi"
@@ -58,7 +54,6 @@ resource "terraform_data" "rpi" {
     private_key = file(local.key)
   }
 
-  # traefik off: ruch wchodzi przez Istio Gateway; servicelb tylko na RPi (enablelb), więc LB = IP RPi5
   provisioner "remote-exec" {
     inline = [
       "${local.install} server --disable=traefik --tls-san=${var.rpi_host} --node-label=homelab/node=rpi --node-label=svccontroller.k3s.cattle.io/enablelb=true",

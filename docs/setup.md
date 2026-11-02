@@ -25,15 +25,13 @@ Statistics-UI has no environment variables: it is a static frontend, and the gat
 Create a `.env` file in the homelab-infra root directory with this content and fill in the empty values:
 
 ```bash
-# --- terraform/k3s ---
-TF_VAR_rpi_host=                     # RPi5 IP: k3s server, target of wildcard DNS *.home.arpa
-TF_VAR_wyse_host=                    # Wyse 5070 IP: k3s agent + Postgres; in the cluster as ${WYSE_IP}
-TF_VAR_ssh_user=                     # user with SSH key and passwordless sudo on both hosts
+TF_VAR_rpi_host=
+TF_VAR_wyse_host=
+TF_VAR_ssh_user=
 TF_VAR_ssh_private_key=~/.ssh/id_ed25519
-TF_VAR_wyse_system_reserved_memory=4Gi   # Wyse RAM outside pods (HA + Postgres); 8 GB → approx. 3.4 GiB for pods
+TF_VAR_wyse_system_reserved_memory=4Gi
 
-# --- terraform/flux ---
-TF_VAR_github_token=                 # fine-grained PAT: homelab-infra repo only, Contents: read & write
+TF_VAR_github_token=
 ```
 
 Terraform reads `TF_VAR_<name>` as variable `<name>`, so load the file before every `terraform`:
@@ -91,15 +89,15 @@ Following [postgres.md](postgres.md):
 cd ~/IdeaProjects/homelab-infra
 set -a; . ./.env; set +a
 cd terraform/k3s
-terraform init && terraform apply   # installs k3s on RPi5 and Wyse, writes terraform/kubeconfig
+terraform init && terraform apply
 ```
 
 ## 5. Flux
 
 ```bash
-cd ../flux                          # .env already loaded in this shell
-terraform init && terraform apply   # Flux, ConfigMap cluster-vars
-cd ../.. && git pull                # bootstrap commits clusters/home/flux-system
+cd ../flux
+terraform init && terraform apply
+cd ../.. && git pull
 ```
 
 Flux sets up Gateway API, Istio, `home-gateway`, the `apps` namespace, the `postgres` Service, Vault + External Secrets Operator and both applications on its own. The first run takes a few minutes.
@@ -114,13 +112,13 @@ Until then the statistics-service pod waits in `CreateContainerConfigError` (no 
 
 ```bash
 export KUBECONFIG=~/IdeaProjects/homelab-infra/terraform/kubeconfig
-kubectl get nodes -L homelab/node                  # rpi and wyse, Ready
-kubectl -n flux-system get kustomizations          # infrastructure, apps, statistics-*: Ready True
-kubectl -n apps get externalsecret                 # SecretSynced
-kubectl -n apps get pods                           # statistics-service, statistics-ui: Running
+kubectl get nodes -L homelab/node
+kubectl -n flux-system get kustomizations
+kubectl -n apps get externalsecret
+kubectl -n apps get pods
 kubectl -n apps run psql --rm -it --restart=Never --image=postgres:16 -- \
   psql "postgresql://statistics@postgres.apps.svc.cluster.local:5432/statistics" -c 'show search_path'
-curl -sI http://statistics.home.arpa/              # 200 from UI
+curl -sI http://statistics.home.arpa/
 ```
 
 ## Troubleshooting

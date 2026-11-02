@@ -10,8 +10,8 @@ Applications in k3s use Postgres running on the Wyse host, outside the cluster. 
    ```
 2. `pg_hba.conf` (`SELECT pg_reload_conf();` is enough):
    ```
-   host  statistics  all  10.42.0.0/16    scram-sha-256   # pods (default k3s CIDR), incl. those on Wyse
-   host  statistics  all  <RPi5 IP>/32    scram-sha-256   # pods on RPi5 go out with the node IP (flannel masquerade)
+   host  statistics  all  10.42.0.0/16    scram-sha-256
+   host  statistics  all  <RPi5 IP>/32    scram-sha-256
    ```
    Postgres in Docker: publish port `5432:5432`. Check in the logs (`log_connections = on`) which IP the connections come from: with the Docker proxy it is sometimes the Docker network gateway. The firewall on Wyse (e.g. `ufw`) must allow 5432 from the same addresses.
 3. Database:
@@ -34,8 +34,8 @@ The mesh (ambient) passes traffic to a destination outside the mesh as plain TCP
 Role and schema names without hyphens (e.g. `statistics`), so they do not need quoting in SQL.
 
 ```bash
-openssl rand -hex 24                          # password
-ssh wyse sudo -u postgres psql -d statistics     # Docker: ssh wyse docker exec -it <container> psql -U postgres -d statistics
+openssl rand -hex 24
+ssh wyse sudo -u postgres psql -d statistics
 ```
 
 ```sql

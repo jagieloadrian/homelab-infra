@@ -71,10 +71,10 @@ Manifests are rendered by the shared chart [`charts/app`](charts/app/values.yaml
      values:
        image: ghcr.io/jagieloadrian/hello:main-00000000000000-0000000
        route:
-         hostname: hello.home.arpa    # empty = no HTTPRoute
-       env:                           # plain config -> ConfigMap hello-config
+         hostname: hello.home.arpa
+       env:
          LOG_FORMAT: json
-       secrets: true                  # Secret hello-secrets from Vault secret/apps/hello
+       secrets: true
    ```
    Changing `values.env` triggers a rollout (annotation `checksum/env`). A secret change in Vault needs `kubectl rollout restart` ([docs/vault.md](docs/vault.md)). `namespace` can be omitted, Flux enforces `apps`.
 2. Secrets (optional): `secrets: true` in values, keys (= env variable names) in Vault `secret/apps/<app>` ([docs/vault.md](docs/vault.md)).

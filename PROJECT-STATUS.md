@@ -23,6 +23,7 @@
 ## Done (2026-11-02)
 
 - Vault + External Secrets Operator replace SOPS: Vault standalone + ESO in `infrastructure/vault.yaml`, SecretStore `vault` in `apps/secret-store.yaml`, `charts/app` value `secrets: true` → ExternalSecret `<app>-secrets` from `secret/apps/<app>`, NATS ExternalSecret `nats-auth` from `secret/apps/nats`. Nothing secret in git (CI: no Secret manifests), app CI keyless; app repos have only `.devops/helm/release.yaml`. Description: `docs/vault.md`.
+- No comments in any code or config file across homelab-infra, StatisticsService, Statistics-UI and mon-home-ass; explanations live in docs and commit messages.
 
 ## Decisions
 

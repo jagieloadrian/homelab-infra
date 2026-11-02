@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Rejestruje aplikację w klastrze (README: "Aplikacje").
-#   scripts/new-app.sh own  <name>                                  # własna, manifesty w .devops/ repo <name>
-#   scripts/new-app.sh helm <name> <repo-url> <chart> <version> [port] # gotowa z Helm charta, tutaj w apps/<name>/
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-usage() { sed -n '3,4p' "$0" | sed 's/^# *//' >&2; exit 1; }
+usage() {
+  printf '%s\n' 'scripts/new-app.sh own  <name>' 'scripts/new-app.sh helm <name> <repo-url> <chart> <version> [port]' >&2
+  exit 1
+}
 
 mode=${1:-} name=${2:-}
 [[ $name =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || usage

@@ -10,13 +10,11 @@ permissions:
 
 defaults:
   run:
-    shell: bash  # -eo pipefail: błąd kustomize build nie ginie w potoku
+    shell: bash
 
 env:
   KUBECONFORM_VERSION: v0.8.0
-  # Kindy bez wariantu standalone (CustomResourceDefinition: rekurencyjny schemat); $ref pobierane po HTTPS
   K8S_SCHEMAS: https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/master/{{.ResourceKind}}{{.KindSuffix}}.json
-  # Schematy CRD (Flux, Istio, Gateway API) z katalogu datreeio
   CRD_SCHEMAS: https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json
 
 jobs:
@@ -46,9 +44,9 @@ jobs:
       - name: Kubernetes manifests
         run: |
           kc() { kubeconform -strict -summary -ignore-filename-pattern 'kustomization\.yaml$' -schema-location default -schema-location "$K8S_SCHEMAS" -schema-location "$CRD_SCHEMAS" "$@"; }
-          kustomize build infrastructure | kc -   # CRD Gateway API, Istio, Gateway, Postgres Service
-          kc clusters/home                        # Flux Kustomizations, rejestracje aplikacji
-          kc apps                                 # gotowe aplikacje (Helm)
+          kustomize build infrastructure | kc -
+          kc clusters/home
+          kc apps
 
       - name: Chart charts/app (własne aplikacje)
         run: |
@@ -58,7 +56,6 @@ jobs:
 
       - name: Flux substitution only for known variables
         run: |
-          # Flux podstawia z ConfigMap cluster-vars (terraform/flux); nieznana zmienna = pusty string w klastrze
           unknown=$(kustomize build infrastructure | grep -o '\${[A-Za-z_][A-Za-z0-9_]*}' | sort -u | grep -vx '${WYSE_IP}' || true)
           [ -z "$unknown" ] || { echo "::error::nieznane zmienne Flux: $unknown (dodaj je do cluster-vars w terraform/flux)"; exit 1; }
 
@@ -78,7 +75,6 @@ jobs:
 
       - name: No Secret manifests in git
         run: |
-          # sekrety tylko w Vault (docs/vault.md); w gicie ExternalSecret, nigdy Secret, nawet zaszyfrowany
           bad=$(git ls-files '*.yaml' '*.yml' '*.tpl' | xargs grep -lE '^kind: Secret$' || true)
           [ -z "$bad" ] || { echo "::error::kind: Secret w repo: $bad (wpisz do Vault, docs/vault.md)"; exit 1; }
 
