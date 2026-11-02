@@ -26,7 +26,7 @@ variable "ssh_private_key" {
 
 variable "k3s_channel" {
   type    = string
-  default = "stable"
+  default = "v1.36"
 }
 
 variable "wyse_system_reserved_memory" {

@@ -12,6 +12,12 @@ metadata:
   name: nats
 spec:
   interval: 1h
+  install:
+    remediation:
+      retries: -1
+  upgrade:
+    remediation:
+      retries: 3
   chart:
     spec:
       chart: nats
