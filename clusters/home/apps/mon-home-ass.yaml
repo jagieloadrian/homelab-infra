@@ -1,0 +1,38 @@
+# Rejestracja aplikacji: cp _app.yaml.example <app>.yaml && sed -i 's/mon-home-ass/<app>/g' <app>.yaml
+# Flux czyta (read-only) katalog .devops/helm/ (HelmRelease na charts/app) z repo aplikacji i wdraża go do namespace apps.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: mon-home-ass
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: https://github.com/jagieloadrian/mon-home-ass
+  ref:
+    branch: main
+  # Repo prywatne: token z bootstrapu Fluxa (PAT musi mieć Contents: read także na mon-home-ass).
+  secretRef:
+    name: flux-system
+  ignore: |
+    /*
+    !/.devops/helm/
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: mon-home-ass
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infrastructure
+  interval: 10m
+  path: ./.devops/helm
+  prune: true
+  targetNamespace: apps
+  sourceRef:
+    kind: GitRepository
+    name: mon-home-ass
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
