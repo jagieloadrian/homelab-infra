@@ -5,3 +5,4 @@ resources:
   - istio.yaml
   - platform.yaml
   - postgres.yaml
+  - kiali.yaml

@@ -57,7 +57,7 @@ kubectl -n apps run psql --rm -it --restart=Never --image=postgres:16 -- \
 ## Po stronie aplikacji
 
 - URL: `jdbc:postgresql://postgres.apps.svc.cluster.local:5432/statistics?currentSchema=<app>`.
-- Hasło w `.devops/k8s/secrets.sops.env` repo aplikacji (SOPS), nigdy w `config.env` ([setup.md](setup.md), krok 1).
+- Hasło w `.devops/helm/secrets.sops.yaml` repo aplikacji (SOPS, `secretEnv`), nigdy w `values.env` w `release.yaml` ([setup.md](setup.md), krok 1).
 - Flyway bez dodatkowej konfiguracji używa pierwszej schemy z `search_path`, więc migracje i `flyway_schema_history` lądują w schemie aplikacji.
 
 ## Backup

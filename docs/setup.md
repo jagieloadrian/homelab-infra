@@ -16,8 +16,8 @@ Kroki 0–8, w tej kolejności. Na końcu działa k3s na RPi5 + Wyse z Fluxem i 
 | `.env` | homelab-infra, katalog główny | nie (`.gitignore`) | wejścia Terraform: IP hostów, SSH, token GitHub, ścieżka klucza age |
 | `~/.config/sops/age/keys.txt` | Twój komputer | nigdy | prywatny klucz age, jedyny klucz do sekretów; trzymaj kopię (np. w menedżerze haseł) |
 | `.sops.yaml` | homelab-infra i StatisticsService, katalog główny | tak | publiczny klucz age (`age1…`), którym szyfrujesz |
-| `.devops/k8s/config.env` | StatisticsService | tak, jawny | konfiguracja aplikacji → ConfigMap `statistics-service-config` |
-| `.devops/k8s/secrets.sops.env` | StatisticsService | tak, zaszyfrowany | hasła aplikacji → Secret `statistics-service-secrets` |
+| `.devops/helm/release.yaml` (`values.env`) | StatisticsService | tak, jawny | konfiguracja aplikacji → ConfigMap `statistics-service-config` |
+| `.devops/helm/secrets.sops.yaml` (`secretEnv`) | StatisticsService | tak, zaszyfrowany | hasła aplikacji → Secret `statistics-service-secrets` |
 
 Statistics-UI nie ma zmiennych środowiskowych: to statyczny frontend, a `/api/` kieruje do serwisu gateway.
 
@@ -46,7 +46,7 @@ set -a; . ./.env; set +a
 
 `TF_VAR_wyse_host` trafia też do klastra. `terraform/flux` zapisuje go w ConfigMap `flux-system/cluster-vars` jako `WYSE_IP`, a Flux podstawia `${WYSE_IP}` w `infrastructure/postgres.yaml`. Dzięki temu IP nie jest w gicie.
 
-### StatisticsService/.devops/k8s/config.env (jawny, już w repo)
+### StatisticsService/.devops/helm/release.yaml, `values.env` (jawny, już w repo)
 
 | Zmienna | Wartość | Znaczenie |
 | --- | --- | --- |
@@ -61,9 +61,9 @@ set -a; . ./.env; set +a
 | `TRUST_PROXY` | `true` | limit logowań liczony po `X-Forwarded-For` z gatewaya |
 | `LOG_FORMAT` | `json` | logi JSON na stdout |
 
-Zmiana tego pliku + push do `main` = nowy ConfigMap i rollout.
+Zmiana `values.env` + push do `main` = upgrade HelmRelease, nowy ConfigMap i rollout (annotacja `checksum/env`).
 
-### StatisticsService/.devops/k8s/secrets.sops.env (zaszyfrowany)
+### StatisticsService/.devops/helm/secrets.sops.yaml, `secretEnv` (zaszyfrowany)
 
 | Zmienna | Wartość |
 | --- | --- |
@@ -87,30 +87,33 @@ Wpisz klucz publiczny w miejsce `age1REPLACE_WITH_YOUR_PUBLIC_KEY` w `homelab-in
 
 ```bash
 cd ~/IdeaProjects/StatisticsService
-sops .devops/k8s/secrets.sops.env   # edytor; zapis = szyfrowanie
+sops .devops/helm/secrets.sops.yaml   # edytor; zapis = szyfrowanie
 ```
 
 Treść:
 
-```bash
-DB_PASSWORD=<openssl rand -hex 24>
-ADMIN_PASSWORD=<hasło admina>
-OIDC_CLIENT_SECRET=
+```yaml
+secretEnv:
+  DB_PASSWORD: <openssl rand -hex 24>
+  ADMIN_PASSWORD: <hasło admina>
+  OIDC_CLIENT_SECRET: ""
 ```
 
-Sprawdź, że plik jest zaszyfrowany (`grep sops_version .devops/k8s/secrets.sops.env`), i zrób commit. Podgląd później: `sops -d .devops/k8s/secrets.sops.env`.
+Sprawdź, że wartości są zaszyfrowane (`ENC[...]` w `.devops/helm/secrets.sops.yaml`), i zrób commit. Podgląd później: `sops -d .devops/helm/secrets.sops.yaml`. Flux odszyfrowuje go do Secretu `statistics-service-values`, a HelmRelease czyta go przez `valuesFrom`.
+
+Kolejka (`BROKER=jetstream`): najpierw hasła NATS w `homelab-infra/apps/nats/secret.sops.yaml`, potem `NATS_USER`/`NATS_PASSWORD` w tym pliku ([nats.md](nats.md)).
 
 ## 4. Postgres na Wyse
 
 Według [postgres.md](postgres.md):
 
 1. „Raz: Postgres na Wyse”: `listen_addresses`, `pg_hba.conf`, baza `statistics`.
-2. „Każda aplikacja” z `<app>` = `statistics` i hasłem `DB_PASSWORD` z kroku 3 (`sops -d .devops/k8s/secrets.sops.env | grep DB_PASSWORD`).
+2. „Każda aplikacja” z `<app>` = `statistics` i hasłem `DB_PASSWORD` z kroku 3 (`sops -d .devops/helm/secrets.sops.yaml | grep DB_PASSWORD`).
 
 ## 5. Repo na GitHubie
 
 1. homelab-infra: `git push` na `main` (Flux czyta `clusters/home` z `main`).
-2. StatisticsService i Statistics-UI: merge `feature-6/cleaning-and-refactoring` → `main` i push. Pierwszy build na `main` buduje obraz i commituje jego tag do `.devops/k8s`. Wcześniejszy tag `main-20261028120000-abc1234` nie istnieje.
+2. StatisticsService i Statistics-UI: merge `feature-6/cleaning-and-refactoring` → `main` i push. Pierwszy build na `main` buduje obraz i commituje jego tag do `.devops/helm/release.yaml`. Wcześniejszy tag `main-20261028120000-abc1234` nie istnieje.
 3. GitHub → Packages → `statistics-service` i `statistics-ui` → Package settings → widoczność **Public**. Klaster pobiera obrazy bez logowania; nowe paczki GHCR są domyślnie prywatne.
 4. Branch protection na `main` (jeśli jest) musi przepuszczać `github-actions[bot]`, bo CI commituje tag.
 
@@ -150,7 +153,7 @@ curl -sI http://statistics.home.arpa/              # 200 z UI
 | Objaw | Przyczyna / gdzie patrzeć |
 | --- | --- |
 | `infrastructure` nie Ready | `kubectl -n flux-system describe kustomization infrastructure`; brak ConfigMap `cluster-vars` → krok 7 |
-| `statistics-service` nie Ready: `secrets.sops.env` nie istnieje albo błąd deszyfrowania | krok 3; klucz w `.sops.yaml` musi pasować do `keys.txt` przekazanego w kroku 7 |
+| `statistics-service` nie Ready: `secrets.sops.yaml` nie istnieje albo błąd deszyfrowania | krok 3; klucz w `.sops.yaml` musi pasować do `keys.txt` przekazanego w kroku 7 |
 | Pod `ImagePullBackOff` | paczka GHCR prywatna albo obraz jeszcze się nie zbudował (krok 5) |
 | statistics-service restartuje się, readiness 503 | brak połączenia z Postgresem: `pg_hba.conf`, `listen_addresses`, firewall, hasło (krok 4) |
 | `statistics.home.arpa` nie odpowiada | DNS wildcard → IP RPi5; `kubectl -n istio-ingress get gateway home-gateway` |

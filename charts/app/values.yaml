@@ -1,0 +1,15 @@
+# Wymagane: image. Reszta to domyślne wartości kontraktu.
+image: ""            # ghcr.io/jagieloadrian/<app>:<tag>, tag podbija CI aplikacji (sed na "image: ")
+port: 8080           # port kontenera; probes: /health/live, /health/ready
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 256Mi
+tmpSize: 64Mi        # emptyDir na /tmp (root filesystem jest read-only)
+env: {}              # jawna konfiguracja -> ConfigMap <app>-config (envFrom)
+secretEnv: {}        # sekrety z secrets.sops.yaml (valuesFrom) -> Secret <app>-secrets (envFrom)
+route:
+  hostname: ""       # pusty = bez HTTPRoute
+  pathPrefix: /
