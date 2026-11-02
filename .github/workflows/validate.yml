@@ -50,6 +50,12 @@ jobs:
           kc clusters/home                        # Flux Kustomizations, rejestracje aplikacji
           kc apps                                 # gotowe aplikacje (Helm)
 
+      - name: Chart charts/app (własne aplikacje)
+        run: |
+          set -- --set image=ghcr.io/ci/ci:ci --set route.hostname=ci.home.arpa --set env.A=a --set secretEnv.B=b
+          helm lint --strict charts/app "$@"
+          helm template ci charts/app "$@" | kubeconform -strict -summary -schema-location default -schema-location "$CRD_SCHEMAS" -
+
       - name: Flux substitution only for known variables
         run: |
           # Flux podstawia z ConfigMap cluster-vars (terraform/flux); nieznana zmienna = pusty string w klastrze

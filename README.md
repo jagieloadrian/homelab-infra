@@ -9,7 +9,8 @@ Platforma z dokumentu „Homelab Platform Contract”: 2-node'owy k3s (RPi5 arm6
 | Gateway API v1.6 CRDs, Istio ambient (base, istiod, cni, ztunnel) | `infrastructure/` | Flux |
 | Gateway `home-gateway` (`istio-ingress`), namespace `apps` z ambient | `infrastructure/platform.yaml` | Flux |
 | Własne aplikacje: lista, plik na aplikację | `clusters/home/apps/` | Flux (read-only z repo aplikacji) |
-| Manifesty własnych aplikacji | `.devops/` w repo aplikacji | Flux |
+| Wspólny Helm chart własnych aplikacji | `charts/app/` | Flux (HelmRelease z repo aplikacji) |
+| HelmRelease + values własnych aplikacji | `.devops/helm/` w repo aplikacji | Flux |
 | Gotowe aplikacje (Helm chart, bez budowania) | `apps/<name>/` | Flux |
 | NATS z JetStream: kolejka ingestu statistics-service | `apps/nats/` | Flux (Helm) |
 | Rejestracja aplikacji | `scripts/new-app.sh` | skrypt |
@@ -26,7 +27,7 @@ Dwa rodzaje, oba w namespace `apps` (ambient mesh):
 
 | Rodzaj | Konfig | Rejestracja | Aktualizacje |
 | --- | --- | --- | --- |
-| Własna (budowana w CI) | `.devops/` w repo aplikacji | `scripts/new-app.sh own <name>` | CI commituje nowy tag do `.devops/` |
+| Własna (budowana w CI) | `.devops/helm/` w repo aplikacji (chart `charts/app`) | `scripts/new-app.sh own <name>` | CI commituje nowy tag do `.devops/helm/release.yaml` |
 | Gotowa (Helm chart: Authelia, oauth2-proxy…) | `apps/<name>/` tutaj | `scripts/new-app.sh helm <name> <repo> <chart> <wersja> [port]` | Flux sam instaluje nowe wersje z zakresu semver |
 
 ### Gotowa aplikacja (Helm chart)
@@ -57,19 +58,56 @@ Powstaje `apps/authelia/release.yaml`: HelmRepository (OCI też: `oci://...`), H
 Wersja `0.11.x` oznacza, że Flux sam instaluje nowe wydania 0.11.*. Major bump to ręczna zmiana zakresu.
 Authelia: chart domyślnie tworzy DaemonSet, ustaw `pod.kind: Deployment`. Forward-auth dla innych aplikacji wymaga `extensionProviders` w istiod (osobny krok).
 
-### Własna aplikacja (`.devops/`)
+### Własna aplikacja (`.devops/helm/`)
 
-Przepływ: merge do `main` → CI buduje obraz `main-<ts>-<sha7>` → CI podbija tag w `.devops/` i commituje → Flux (co 1 min) widzi commit → rollout. Rollback = `git revert` w repo aplikacji.
+Przepływ: merge do `main` → CI buduje obraz `main-<ts>-<sha7>` → CI podbija tag w `.devops/helm/release.yaml` i commituje → Flux (co 1 min) widzi commit → upgrade HelmRelease → rollout. Rollback = `git revert` w repo aplikacji.
 
-1. W repo aplikacji katalog `.devops/` z manifestami wg kontraktu (ServiceAccount, Deployment, Service, HTTPRoute, AuthorizationPolicy). `namespace` można pominąć, Flux wymusza `apps`.
-2. Zmienne środowiskowe jako pliki dotenv obok manifestów (wzór: StatisticsService `.devops/k8s/`):
-   - `config.env`: jawna konfiguracja, `configMapGenerator`,
-   - `secrets.sops.env`: sekrety, `secretGenerator`, tworzone i edytowane tylko przez `sops <plik>`; Flux odszyfrowuje przy budowaniu,
-   - Deployment: `envFrom` na nazwy generatorów (kustomize dopisuje hash, więc zmiana pliku robi rollout),
+Manifesty renderuje wspólny chart [`charts/app`](charts/app/values.yaml) (ServiceAccount, Deployment, Service, HTTPRoute, AuthorizationPolicy, ConfigMap/Secret z env). Repo aplikacji ma tylko values. Wzór: StatisticsService `.devops/helm/`.
+
+1. `.devops/helm/release.yaml`: HelmRelease z chartem z tego repo i values (opis w `charts/app/values.yaml`):
+   ```yaml
+   apiVersion: helm.toolkit.fluxcd.io/v2
+   kind: HelmRelease
+   metadata:
+     name: hello
+   spec:
+     interval: 10m
+     chart:
+       spec:
+         chart: ./charts/app
+         reconcileStrategy: Revision
+         sourceRef:
+           kind: GitRepository
+           name: flux-system
+           namespace: flux-system
+     valuesFrom:                      # tylko gdy są sekrety (punkt 2)
+       - kind: Secret
+         name: hello-values
+     values:
+       image: ghcr.io/jagieloadrian/hello:main-00000000000000-0000000
+       route:
+         hostname: hello.home.arpa    # pusty = bez HTTPRoute
+       env:                           # jawna konfiguracja -> ConfigMap hello-config
+         LOG_FORMAT: json
+   ```
+   Zmiana `values.env` / `secretEnv` robi rollout (annotacja `checksum/env`). `namespace` można pominąć, Flux wymusza `apps`.
+2. Sekrety (opcjonalnie) jako zaszyfrowane values Helma:
+   - `secrets.sops.yaml`: `secretEnv: {KLUCZ: wartość}` → Secret `hello-secrets` (`envFrom`), tworzony i edytowany tylko przez `sops <plik>`,
+   - `kustomization.yaml` obok (Flux odszyfrowuje przy budowaniu, klucz musi kończyć się na `.yaml`):
+     ```yaml
+     resources: [release.yaml]
+     secretGenerator:
+       - name: hello-values
+         files: [values.yaml=secrets.sops.yaml]
+         options:
+           disableNameSuffixHash: true
+           labels:
+             reconcile.fluxcd.io/watch: Enabled
+     ```
    - `.sops.yaml` w repo aplikacji:
      ```yaml
      creation_rules:
-       - path_regex: \.devops/k8s/secrets\.sops\.env$
+       - path_regex: \.devops/helm/secrets\.sops\.yaml$
          age: age1...   # age-keygen -y ~/.config/sops/age/keys.txt
      ```
 3. W workflow `build` z kontraktu: `permissions.contents: write` i krok po pushu obrazu:
@@ -77,15 +115,17 @@ Przepływ: merge do `main` → CI buduje obraz `main-<ts>-<sha7>` → CI podbija
          - name: Deploy (bump image tag)
            if: github.ref == 'refs/heads/main'
            run: |
-             sed -i -E "s#(image: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}):[^[:space:]]+#\1:${{ steps.tag.outputs.tag }}#" .devops/*.yaml
+             sed -i -E "s#(image: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}):[^[:space:]]+#\1:${{ steps.tag.outputs.tag }}#" .devops/helm/release.yaml
              git config user.name 'github-actions[bot]'
              git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
              git commit -am "chore(deploy): ${{ steps.tag.outputs.tag }}"
              git pull --rebase && git push
    ```
-   `.devops/*.yaml` zamień na katalog, w którym leży Deployment (np. `.devops/k8s/*.yaml`). Push z `GITHUB_TOKEN` nie odpala kolejnego workflow, więc nie ma pętli. Branch protection na `main` musi przepuszczać `github-actions[bot]`.
+   Push z `GITHUB_TOKEN` nie odpala kolejnego workflow, więc nie ma pętli. Branch protection na `main` musi przepuszczać `github-actions[bot]`.
+   Walidacja w CI aplikacji (`devops.yml`, wzór: StatisticsService): checkout `charts/` z tego repo, `helm template` z values z `release.yaml` + `kubeconform`.
 4. Rejestracja tutaj: `scripts/new-app.sh own hello`, commit + push.
-   Prywatne repo aplikacji: dodaj `secretRef` z read-only tokenem do `GitRepository`.
+   Prywatne repo aplikacji: dodaj `secretRef` do `GitRepository` (wzór: `clusters/home/apps/mon-home-ass.yaml`).
+   Podgląd lokalnie: `yq .spec.values .devops/helm/release.yaml | helm template hello ../homelab-infra/charts/app -f -`.
 
 ## Instrukcje
 

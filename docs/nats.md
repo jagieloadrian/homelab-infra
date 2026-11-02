@@ -66,18 +66,18 @@ Bez Secret pod `nats-0` stoi w `CreateContainerConfigError`, a HelmRelease `nats
 
 ## statistics-service
 
-`StatisticsService/.devops/k8s/config.env`:
+`StatisticsService/.devops/helm/release.yaml`, `values.env`:
 
-```bash
-BROKER=jetstream
-NATS_URL=nats://nats.apps.svc.cluster.local:4222
+```yaml
+BROKER: jetstream
+NATS_URL: nats://nats.apps.svc.cluster.local:4222
 ```
 
-`StatisticsService/.devops/k8s/secrets.sops.env` (`sops .devops/k8s/secrets.sops.env`):
+`StatisticsService/.devops/helm/secrets.sops.yaml`, `secretEnv` (`sops .devops/helm/secrets.sops.yaml`):
 
-```bash
-NATS_USER=statistics-service
-NATS_PASSWORD=<STATS_SERVICE_PASSWORD z apps/nats/secret.sops.yaml>
+```yaml
+NATS_USER: statistics-service
+NATS_PASSWORD: <STATS_SERVICE_PASSWORD z apps/nats/secret.sops.yaml>
 ```
 
 ## Test

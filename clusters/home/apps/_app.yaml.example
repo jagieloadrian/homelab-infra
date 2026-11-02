@@ -1,5 +1,5 @@
 # Rejestracja aplikacji: cp _app.yaml.example <app>.yaml && sed -i 's/APP/<app>/g' <app>.yaml
-# Flux czyta (read-only) katalog .devops/ z repo aplikacji i wdraża go do namespace apps.
+# Flux czyta (read-only) katalog .devops/helm/ (HelmRelease na charts/app) z repo aplikacji i wdraża go do namespace apps.
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
 metadata:
@@ -12,7 +12,7 @@ spec:
     branch: main
   ignore: |
     /*
-    !/.devops/
+    !/.devops/helm/
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
@@ -23,7 +23,7 @@ spec:
   dependsOn:
     - name: infrastructure
   interval: 10m
-  path: ./.devops
+  path: ./.devops/helm
   prune: true
   targetNamespace: apps
   sourceRef:
