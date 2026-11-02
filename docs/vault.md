@@ -11,9 +11,11 @@ External Secrets Operator (ESO) copies Vault `secret/apps/<app>` (KV v2) into Se
 | ExternalSecret of an own app | chart `charts/app`, value `secrets: true` |
 | ExternalSecret of NATS (`nats-auth`) | `apps/nats/release.yaml` |
 
-Locally: the `vault` CLI (or run the same commands inside `kubectl -n vault exec -it vault-0 -- sh`).
+Locally: the `vault` CLI (or run the same commands inside `kubectl -n vault exec -it vault-0 -- sh`), and `KUBECONFIG` set to `<homelab-infra checkout>/terraform/kubeconfig`.
 
-## 1. Init (once, after `terraform apply` in `terraform/flux`)
+## 1. Init (once)
+
+Start when `kubectl -n vault get pod vault-0` shows `Running` ([setup.md](setup.md), step 5). The pod shows `Ready` even while sealed, on purpose.
 
 ```bash
 kubectl -n vault exec -it vault-0 -- vault operator init -key-shares=1 -key-threshold=1
@@ -25,7 +27,10 @@ It prints `Unseal Key 1` and `Initial Root Token`. Put both in a password manage
 
 ```bash
 kubectl -n vault exec -it vault-0 -- vault operator unseal
+kubectl -n vault exec vault-0 -- vault status
 ```
+
+Paste `Unseal Key 1` at the prompt. `vault status` must show `Sealed false`.
 
 While Vault is sealed, the Secrets already in the cluster keep working. ESO just can't create or refresh them.
 
@@ -48,6 +53,8 @@ vault write auth/kubernetes/role/apps \
   policies=apps-read ttl=1h
 ```
 
+The port-forward runs in the background. The Vault UI is at `http://localhost:8200/ui`. `vault login` asks for the `Initial Root Token` from step 1.
+
 ESO logs in with a token of ServiceAccount `apps/vault-reader` and can only read `secret/apps/*`.
 
 ## 4. Secrets per application
@@ -60,10 +67,17 @@ The key names are the env variable names. Generate passwords with `openssl rand 
 | `secret/apps/mon-home-ass` | `DB_PASSWORD` |
 | `secret/apps/nats` | `STATS_SERVICE_PASSWORD` (= `NATS_PASSWORD` of statistics-service), `COLLECTOR_PASSWORD` |
 
+Commands for the first setup: [setup.md](setup.md), step 7. Examples:
+
 ```bash
 vault kv put secret/apps/mon-home-ass DB_PASSWORD=-
 vault kv patch secret/apps/statistics-service ADMIN_PASSWORD=-
+vault kv get secret/apps/statistics-service
 ```
+
+- `KEY=-` reads the value from stdin. Type it, then press Ctrl+D twice (no Enter, it would become part of the value). The value stays out of shell history.
+- `kv put` replaces all keys at the path. Keys you leave out are deleted.
+- `kv patch` changes one key and keeps the rest. The path must already exist (`kv put` first).
 
 With several keys, the UI is easier (`secret/` → `apps/<app>` → JSON).
 
@@ -71,12 +85,14 @@ With several keys, the UI is easier (`secret/` → `apps/<app>` → JSON).
 
 ## Change takes effect
 
-ESO refreshes every hour, and the app reads env only at start:
+ESO refreshes every hour, and the app reads env only at start. The annotation forces ESO to sync now; the restart makes the app read the new Secret:
 
 ```bash
 kubectl -n apps annotate externalsecret <app>-secrets force-sync=$(date +%s) --overwrite
 kubectl -n apps rollout restart deploy/<app>
 ```
+
+For NATS: ExternalSecret `nats-auth`, restart `statefulset/nats`.
 
 ## Check
 
@@ -84,8 +100,22 @@ kubectl -n apps rollout restart deploy/<app>
 kubectl -n apps get externalsecret
 ```
 
+Every ExternalSecret must show STATUS `SecretSynced` and READY `True`.
+
 `SecretSyncedError`: Vault is sealed (step 2), the key does not exist in Vault (step 4) or the role is missing (step 3). The details are in `kubectl -n apps describe externalsecret <app>-secrets`.
 
-## Backup
+## Backup and restore
 
 The Vault data (already encrypted by Vault) is the PVC directory on the RPi5: `/var/lib/rancher/k3s/storage/pvc-*_vault_data-vault-0`. Copy it together with the unseal key (stored separately). One without the other is useless.
+
+```bash
+ssh rpi 'cd /var/lib/rancher/k3s/storage && sudo tar -czf - *_vault_data-vault-0' > vault-$(date +%F).tgz
+```
+
+Restore: stop Vault, replace the contents of the PVC directory with the backup, start Vault, then unseal (step 2) with the unseal key that belongs to this backup. On a new cluster the directory has a new `pvc-*` name; the commands below find it.
+
+```bash
+kubectl -n vault scale statefulset vault --replicas 0
+ssh rpi 'cd /var/lib/rancher/k3s/storage/pvc-*_vault_data-vault-0 && sudo find . -mindepth 1 -delete && sudo tar -xzf - --strip-components=1' < vault-<date>.tgz
+kubectl -n vault scale statefulset vault --replicas 1
+```

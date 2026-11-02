@@ -1,6 +1,6 @@
 # NATS with JetStream: ingest queue
 
-Queue for statistics-service ingest pub/sub (`BROKER=jetstream`). Ready-made application from a Helm chart: `apps/nats/release.yaml`. Available only inside the cluster.
+Queue for statistics-service ingest pub/sub (`BROKER=jetstream`). Ready-made application from a Helm chart: `apps/nats/release.yaml`. Flux always deploys it, so its Vault keys are required. Available only inside the cluster.
 
 | | |
 | --- | --- |
@@ -30,11 +30,11 @@ A collector publishes to `stats.ingest.<sourceId>` with the header `Authorizatio
 
 Further collectors can share the `collector` user, because the source is identified by the token in the header anyway. A separate user: an entry in `config.merge.authorization.users` in `release.yaml` + a password in `nats-auth`.
 
-Network (AuthorizationPolicy `nats`): port 4222 only from `cluster.local/ns/apps/sa/statistics-service`. Add a collector running in the cluster as `cluster.local/ns/apps/sa/<collector>` at the spot marked with a comment in `release.yaml`.
+Network (AuthorizationPolicy `nats`): port 4222 only from `cluster.local/ns/apps/sa/statistics-service`. For a collector running in the cluster, add `cluster.local/ns/apps/sa/<collector>` under `rules[0].from[0].source.principals` of AuthorizationPolicy `nats` in `apps/nats/release.yaml`.
 
 ## Secrets (once)
 
-Requires a configured Vault ([vault.md](vault.md), steps 1–3; [setup.md](setup.md), step 6).
+Requires a configured Vault ([vault.md](vault.md), steps 1–3; [setup.md](setup.md), steps 6–7).
 
 ```bash
 vault kv put secret/apps/nats \
@@ -60,31 +60,28 @@ kubectl -n apps rollout restart statefulset/nats
 
 and the new password in the application (`STATS_SERVICE_PASSWORD`: statistics-service below).
 
-Without the keys in Vault, Secret `nats-auth` does not exist, pod `nats-0` is stuck in `CreateContainerConfigError`, and HelmRelease `nats` fails after 5 min. After adding the keys: `flux reconcile helmrelease nats -n apps --force`.
+Without the keys in Vault, Secret `nats-auth` does not exist and pod `nats-0` waits in `CreateContainerConfigError`. HelmRelease `nats` keeps retrying the install (`install.remediation.retries: -1`), so it recovers on its own once the keys exist.
 
 ## statistics-service
 
-`StatisticsService/.devops/helm/release.yaml`, `values.env`:
+statistics-service starts with `BROKER: none`. `NATS_URL`, `NATS_USER` (`statistics-service`) and the other `NATS_*` values are already in `values.env` of its `.devops/helm/release.yaml`. To switch to the queue:
 
-```yaml
-BROKER: jetstream
-NATS_URL: nats://nats.apps.svc.cluster.local:4222
-NATS_USER: statistics-service
-```
-
-Vault `secret/apps/statistics-service`, `NATS_PASSWORD` must equal `STATS_SERVICE_PASSWORD` ([vault.md](vault.md), "Change takes effect"):
-
-```bash
-vault kv patch secret/apps/statistics-service NATS_PASSWORD=$(vault kv get -field=STATS_SERVICE_PASSWORD secret/apps/nats)
-```
+1. Copy the password to statistics-service. `NATS_PASSWORD` must equal `STATS_SERVICE_PASSWORD`:
+   ```bash
+   vault kv patch secret/apps/statistics-service NATS_PASSWORD=$(vault kv get -field=STATS_SERVICE_PASSWORD secret/apps/nats)
+   kubectl -n apps annotate externalsecret statistics-service-secrets force-sync=$(date +%s) --overwrite
+   ```
+2. Set `BROKER: jetstream` in `values.env` and push to `main`. The rollout picks up the new Secret.
 
 ## Test
 
 ```bash
-export KUBECONFIG=~/IdeaProjects/homelab-infra/terraform/kubeconfig
+export KUBECONFIG=<homelab-infra checkout>/terraform/kubeconfig
 kubectl -n apps get pods,pvc -l app.kubernetes.io/name=nats
 kubectl -n apps port-forward svc/nats 4222
 ```
+
+The port-forward goes through the kubelet straight to the pod. It bypasses ztunnel and AuthorizationPolicy `nats`, which is why the laptop can connect. The NATS users and passwords still apply.
 
 In a second terminal (`nats` CLI; without installing: `docker run --rm -it --network host natsio/nats-box nats ...`):
 
@@ -98,6 +95,8 @@ nats --user collector --password "$COLLECTOR_PASSWORD" \
 nats --user statistics-service --password "$STATS_PASSWORD" stream info STATS_INGEST
 nats pub stats.ingest.x x
 ```
+
+The first command publishes as `collector`, the second shows the stream counters. The last command has no password and must fail with `Authorization Violation`.
 
 Do not pull messages from the `statistics-service` consumer manually (`nats consumer next`), because you would take them away from the application. Whether they arrived shows in `stream info` (counters) and in the statistics-service logs.
 
