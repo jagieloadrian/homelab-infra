@@ -307,7 +307,7 @@ Details: [mon-home-ass `.devops/README.md`](https://github.com/jagieloadrian/mon
 | When | What to do |
 | --- | --- |
 | After every RPi5 reboot or `vault-0` restart | Vault is sealed. Check with `kubectl -n vault exec vault-0 -- vault status` (`Sealed true`), then unseal ([vault.md](vault.md), step 2). |
-| GitHub PAT expires | Put a new token in `.env` (`TF_VAR_github_token`), load `.env`, run `terraform apply` in `terraform/flux`. |
+| GitHub PAT expires | Create a new PAT with the same access (step 1). Replace the copy Flux uses: `flux create secret git flux-system -n flux-system --url=https://github.com/jagieloadrian/homelab-infra --username=git --password=<new PAT>` (it updates the existing Secret). Put the same token in `.env` (`TF_VAR_github_token`) for later Terraform runs. |
 | Vault data lost | Restore the PVC directory and unseal ([vault.md](vault.md), "Backup and restore"). |
 | Postgres backup | [postgres.md](postgres.md), "Backup" |
 
