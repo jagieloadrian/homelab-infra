@@ -29,7 +29,3 @@ spec:
   sourceRef:
     kind: GitRepository
     name: statistics-service
-  decryption:
-    provider: sops
-    secretRef:
-      name: sops-age

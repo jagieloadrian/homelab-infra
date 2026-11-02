@@ -21,18 +21,25 @@ data:
   {{ $k }}: {{ $v | toString | quote }}
   {{- end }}
 {{- end }}
-{{- if .Values.secretEnv }}
+{{- if .Values.secrets }}
 ---
-apiVersion: v1
-kind: Secret
+# Secret <app>-secrets tworzy External Secrets Operator z Vault: secret/apps/<app> (wszystkie klucze -> env).
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
 metadata:
   name: {{ $name }}-secrets
   labels:
     {{- $labels | nindent 4 }}
-stringData:
-  {{- range $k, $v := .Values.secretEnv }}
-  {{ $k }}: {{ $v | toString | quote }}
-  {{- end }}
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: vault
+  target:
+    name: {{ $name }}-secrets
+  dataFrom:
+    - extract:
+        key: apps/{{ $name }}
 {{- end }}
 ---
 apiVersion: apps/v1
@@ -58,8 +65,9 @@ spec:
         {{- $labels | nindent 8 }}
         app.kubernetes.io/version: {{ splitList ":" .Values.image | last | trunc 63 | quote }}
       annotations:
-        # zmiana env/secretEnv robi rollout (jak hash w nazwie z generatorów kustomize)
-        checksum/env: {{ list .Values.env .Values.secretEnv | toJson | sha256sum }}
+        # zmiana env robi rollout (jak hash w nazwie z generatorów kustomize)
+        # ponytail: zmiana sekretu w Vault nie robi rolloutu: kubectl rollout restart (docs/vault.md); Reloader, jeśli to za mało.
+        checksum/env: {{ .Values.env | toJson | sha256sum }}
     spec:
       serviceAccountName: {{ $name }}
       automountServiceAccountToken: false
@@ -79,13 +87,13 @@ spec:
             - name: http
               containerPort: {{ .Values.port }}
               protocol: TCP
-          {{- if or .Values.env .Values.secretEnv }}
+          {{- if or .Values.env .Values.secrets }}
           envFrom:
             {{- if .Values.env }}
             - configMapRef:
                 name: {{ $name }}-config
             {{- end }}
-            {{- if .Values.secretEnv }}
+            {{- if .Values.secrets }}
             - secretRef:
                 name: {{ $name }}-secrets
             {{- end }}

@@ -9,7 +9,7 @@ resources:
     memory: 256Mi
 tmpSize: 64Mi        # emptyDir na /tmp (root filesystem jest read-only)
 env: {}              # jawna konfiguracja -> ConfigMap <app>-config (envFrom)
-secretEnv: {}        # sekrety z secrets.sops.yaml (valuesFrom) -> Secret <app>-secrets (envFrom)
+secrets: false       # true = Secret <app>-secrets z Vault secret/apps/<app> (ExternalSecret, envFrom), docs/vault.md
 route:
   hostname: ""       # pusty = bez HTTPRoute
   pathPrefix: /

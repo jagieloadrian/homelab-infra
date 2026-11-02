@@ -6,3 +6,4 @@ resources:
   - platform.yaml
   - postgres.yaml
   - kiali.yaml
+  - vault.yaml

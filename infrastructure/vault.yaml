@@ -1,0 +1,90 @@
+# Sekrety aplikacji: Vault (źródło) + External Secrets Operator (Vault -> Secret w klastrze).
+# W gicie nie ma żadnych sekretów, nawet zaszyfrowanych. Init, unseal, wpisywanie sekretów: docs/vault.md.
+# Oba namespace'y w ambient: ruch ESO -> Vault idzie po mTLS (ztunnel), nie jawnym HTTP po LAN-ie.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vault
+  labels:
+    istio.io/dataplane-mode: ambient
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-secrets
+  labels:
+    istio.io/dataplane-mode: ambient
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: hashicorp
+  namespace: vault
+spec:
+  interval: 24h
+  url: https://helm.releases.hashicorp.com
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: vault
+  namespace: vault
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: vault
+      version: 0.34.x
+      sourceRef:
+        kind: HelmRepository
+        name: hashicorp
+  values:
+    injector:
+      enabled: false # sekrety do podów daje ESO
+    server:
+      # ponytail: standalone, storage file na PVC local-path; HA (raft, 3 repliki) nie ma sensu na 2 węzłach.
+      standalone:
+        enabled: true
+      dataStorage:
+        size: 1Gi
+        storageClass: local-path
+      nodeSelector:
+        homelab/node: rpi # PVC local-path jest przypięty do węzła
+      # Zapieczętowany/niezainicjowany Vault też jest Ready, inaczej Helm (wait) i cała warstwa infrastructure
+      # czekałyby na ręczny unseal. Zapieczętowany Vault = ESO nie odświeża, istniejące Secrety działają dalej.
+      readinessProbe:
+        path: /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          memory: 256Mi
+    ui:
+      enabled: true # przez port-forward (docs/vault.md), bez HTTPRoute
+# ponytail: bez AuthorizationPolicy (tylko ESO -> 8200): CRD Istio instaluje HelmRelease z tej samej warstwy,
+# więc przy starcie od zera apply by padł. Vault i tak wymaga tokenu; politykę dodać w osobnej warstwie po Istio.
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+  name: external-secrets
+  namespace: external-secrets
+spec:
+  interval: 24h
+  url: https://charts.external-secrets.io
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: external-secrets
+  namespace: external-secrets
+spec:
+  interval: 1h
+  chart:
+    spec:
+      chart: external-secrets
+      version: 2.x
+      sourceRef:
+        kind: HelmRepository
+        name: external-secrets

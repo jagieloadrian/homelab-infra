@@ -57,7 +57,7 @@ kubectl -n apps run psql --rm -it --restart=Never --image=postgres:16 -- \
 ## Application side
 
 - URL: `jdbc:postgresql://postgres.apps.svc.cluster.local:5432/statistics?currentSchema=<app>`.
-- Password in `.devops/helm/secrets.sops.yaml` of the application repo (SOPS, `secretEnv`), never in `values.env` in `release.yaml` ([setup.md](setup.md), step 1).
+- Password (the one from `CREATE ROLE`) in Vault `secret/apps/<application>` as `DB_PASSWORD`, e.g. `secret/apps/statistics-service` ([vault.md](vault.md)), never in `values.env` in `release.yaml`.
 - Flyway without extra configuration uses the first schema from `search_path`, so migrations and `flyway_schema_history` land in the application's schema.
 
 ## Backup
