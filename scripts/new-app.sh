@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 usage() {
-  printf '%s\n' 'scripts/new-app.sh own  <name>' 'scripts/new-app.sh helm <name> <repo-url> <chart> <version> [port]' >&2
+  printf '%s\n' 'Usage:' '  scripts/new-app.sh own  <name>' '  scripts/new-app.sh helm <name> <repo-url> <chart> <version> [port]' '<name>: lowercase letters, digits and hyphens' >&2
   exit 1
 }
 
@@ -13,14 +13,14 @@ mode=${1:-} name=${2:-}
 case $mode in
   own)
     out=clusters/home/apps/$name.yaml
-    [[ ! -e $out ]] || { echo "$out już istnieje" >&2; exit 1; }
+    [[ ! -e $out ]] || { echo "$out already exists" >&2; exit 1; }
     sed "s/APP/$name/g" clusters/home/apps/_app.yaml.example > "$out"
     ;;
   helm)
     (($# >= 5)) || usage
     url=$3 chart=$4 version=$5 port=${6:-80}
     out=apps/$name/release.yaml
-    [[ ! -e $out ]] || { echo "$out już istnieje" >&2; exit 1; }
+    [[ ! -e $out ]] || { echo "$out already exists" >&2; exit 1; }
     mkdir -p "apps/$name"
     sed -e "s|__NAME__|$name|g" -e "s|__URL__|$url|g" -e "s|__CHART__|$chart|g" \
         -e "s|__VERSION__|$version|g" -e "s|__PORT__|$port|g" apps/_template/release.yaml.tpl > "$out"
@@ -29,4 +29,4 @@ case $mode in
   *) usage ;;
 esac
 
-echo "Utworzono $out. Przejrzyj, potem: git add -A && git commit -m 'feat(apps): add $name' && git push"
+echo "Created $out. Review it, then: git add $out && git commit -m 'feat(apps): add $name' && git push"

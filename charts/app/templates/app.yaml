@@ -1,6 +1,6 @@
 {{- $name := .Release.Name }}
 {{- $labels := printf "app.kubernetes.io/name: %s\napp.kubernetes.io/part-of: homelab" $name }}
-{{- if not .Values.image }}{{ fail "values.image jest wymagane" }}{{ end }}
+{{- if not .Values.image }}{{ fail "values.image is required" }}{{ end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:

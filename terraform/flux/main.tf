@@ -28,7 +28,7 @@ variable "github_token" {
 
 variable "wyse_host" {
   type        = string
-  description = "IP Wyse 5070 (Postgres poza klastrem), w manifestach infrastructure/ jako $${WYSE_IP}"
+  description = "Wyse 5070 IP (Postgres outside the cluster), $${WYSE_IP} in the infrastructure/ manifests"
 }
 
 provider "kubernetes" {

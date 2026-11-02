@@ -48,7 +48,7 @@ jobs:
           kc clusters/home
           kc apps
 
-      - name: Chart charts/app (własne aplikacje)
+      - name: Chart charts/app (own apps)
         run: |
           set -- --set image=ghcr.io/ci/ci:ci --set route.hostname=ci.home.arpa --set env.A=a --set secrets=true
           helm lint --strict charts/app "$@"
@@ -57,7 +57,7 @@ jobs:
       - name: Flux substitution only for known variables
         run: |
           unknown=$(kustomize build infrastructure | grep -o '\${[A-Za-z_][A-Za-z0-9_]*}' | sort -u | grep -vx '${WYSE_IP}' || true)
-          [ -z "$unknown" ] || { echo "::error::nieznane zmienne Flux: $unknown (dodaj je do cluster-vars w terraform/flux)"; exit 1; }
+          [ -z "$unknown" ] || { echo "::error::unknown Flux variables: $unknown (add them to cluster-vars in terraform/flux)"; exit 1; }
 
       - name: new-app.sh
         run: |
@@ -76,8 +76,8 @@ jobs:
       - name: No Secret manifests in git
         run: |
           bad=$(git ls-files '*.yaml' '*.yml' '*.tpl' | xargs grep -lE '^kind: Secret$' || true)
-          [ -z "$bad" ] || { echo "::error::kind: Secret w repo: $bad (wpisz do Vault, docs/vault.md)"; exit 1; }
+          [ -z "$bad" ] || { echo "::error::kind: Secret in the repo: $bad (put it in Vault, docs/vault.md)"; exit 1; }
 
       - name: No .env in git
         run: |
-          if git ls-files | grep -E '(^|/)\.env$'; then echo "::error::.env jest w repo (ma zostać lokalnie, docs/setup.md krok 1)"; exit 1; fi
+          if git ls-files | grep -E '(^|/)\.env$'; then echo "::error::.env is in the repo (it must stay local, docs/setup.md step 1)"; exit 1; fi

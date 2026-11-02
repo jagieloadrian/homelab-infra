@@ -7,12 +7,12 @@ terraform {
 
 variable "rpi_host" {
   type        = string
-  description = "IP RPi5 (k3s server, cel wildcard DNS *.home.arpa)"
+  description = "RPi5 IP (k3s server, target of the *.home.arpa DNS wildcard)"
 }
 
 variable "wyse_host" {
   type        = string
-  description = "IP Dell Wyse 5070 (k3s agent obok Home Assistant)"
+  description = "Dell Wyse 5070 IP (k3s agent next to Home Assistant and Postgres)"
 }
 
 variable "ssh_user" {
