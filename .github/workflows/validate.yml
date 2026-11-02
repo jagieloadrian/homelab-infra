@@ -48,7 +48,7 @@ jobs:
           kc() { kubeconform -strict -summary -ignore-filename-pattern 'kustomization\.yaml$' -ignore-filename-pattern '\.sops\.yaml$' -schema-location default -schema-location "$K8S_SCHEMAS" -schema-location "$CRD_SCHEMAS" "$@"; }
           kustomize build infrastructure | kc -   # CRD Gateway API, Istio, Gateway, Postgres Service
           kc clusters/home                        # Flux Kustomizations, rejestracje aplikacji
-          find apps -name '*.yaml' | xargs -r kc  # gotowe aplikacje (Helm)
+          kc apps                                 # gotowe aplikacje (Helm)
 
       - name: Flux substitution only for known variables
         run: |
