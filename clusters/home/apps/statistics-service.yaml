@@ -4,7 +4,7 @@ metadata:
   name: statistics-service
   namespace: flux-system
 spec:
-  interval: 1m
+  interval: 24h
   url: https://github.com/jagieloadrian/statistics-service
   ref:
     branch: main

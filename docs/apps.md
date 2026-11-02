@@ -9,7 +9,15 @@ Two kinds, both in namespace `apps` (ambient mesh):
 
 ## Own app
 
-Flow: merge to `main` → CI builds image `main-<ts>-<sha7>` → CI bumps the tag in `.devops/helm/release.yaml` and commits → Flux sees the commit within a minute (the app's GitRepository has `interval: 1m`) → HelmRelease upgrade → rollout. Rollback = `git revert` in the app repo.
+Flow: merge to `main` → CI builds image `main-<ts>-<sha7>` → CI bumps the tag in `.devops/helm/release.yaml` and commits → Flux picks up the commit on its daily check (the app's GitRepository has `interval: 24h`) → HelmRelease upgrade → rollout. Rollback = `git revert` in the app repo.
+
+To deploy right away instead of waiting for the daily check:
+
+```bash
+flux reconcile kustomization <app> -n flux-system --with-source
+```
+
+`--with-source` fetches the app repo first, then applies `.devops/helm/release.yaml`; the HelmRelease upgrades as soon as its spec changes.
 
 The shared chart [`charts/app`](../charts/app) renders ServiceAccount, Deployment, Service, HTTPRoute, AuthorizationPolicy, ConfigMap from `env` and ExternalSecret. The app repo holds only values. Example: statistics-service `.devops/helm/`.
 
