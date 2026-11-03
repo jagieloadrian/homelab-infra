@@ -177,9 +177,11 @@ statistics-ui has no environment variables. It is a static frontend, and the gat
 | `secret/apps/statistics-service` | `DB_PASSWORD` | password of the `statistics` role (step 2) |
 | | `ADMIN_PASSWORD` | password of the `ADMIN_EMAIL` admin. Empty = no local admin (the first OIDC login with this e-mail becomes admin). |
 | | `OIDC_CLIENT_SECRET` | OIDC client secret. Empty without SSO or for a public client. |
-| | `NATS_PASSWORD` | only with `BROKER=jetstream` ([nats.md](nats.md)) |
-| `secret/apps/nats` | `STATS_SERVICE_PASSWORD`, `COLLECTOR_PASSWORD` | NATS user passwords. Required: NATS is always deployed. |
+| | `NATS_PASSWORD` | copy of `STATS_SERVICE_PASSWORD` ([nats.md](nats.md)) |
+| `secret/apps/nats` | `STATS_SERVICE_PASSWORD`, `COLLECTOR_PASSWORD`, `MON_HOME_ASS_PASSWORD` | NATS user passwords. Required: NATS is always deployed. |
 | `secret/apps/mon-home-ass` | `DB_PASSWORD` | password of the `mon_home_ass` role (step 2) |
+| | `NATS_PASSWORD` | copy of `MON_HOME_ASS_PASSWORD` |
+| | `SOURCE_TOKEN` | token of the statistics-service source `home-assistant`, added after step 9 ([mon-home-ass](#mon-home-ass) below). Until then the publisher stays off. |
 
 ## 2. Postgres on Wyse
 
@@ -248,14 +250,16 @@ NATS, statistics-service and mon-home-ass wait in `CreateContainerConfigError` u
 Use the same shell as step 6 (port-forward, `VAULT_ADDR`, `vault login`). In a new shell, repeat those three lines from [vault.md](vault.md), step 3. Each `KEY=-` reads the value from stdin: type it, then press Ctrl+D twice. Do not press Enter, it would become part of the value. The value stays out of shell history.
 
 ```bash
+vault kv put secret/apps/nats STATS_SERVICE_PASSWORD=$(openssl rand -hex 24) COLLECTOR_PASSWORD=$(openssl rand -hex 24) MON_HOME_ASS_PASSWORD=$(openssl rand -hex 24)
 vault kv put secret/apps/statistics-service DB_PASSWORD=-
 vault kv patch secret/apps/statistics-service ADMIN_PASSWORD=-
 vault kv patch secret/apps/statistics-service OIDC_CLIENT_SECRET=""
-vault kv put secret/apps/nats STATS_SERVICE_PASSWORD=$(openssl rand -hex 24) COLLECTOR_PASSWORD=$(openssl rand -hex 24)
+vault kv patch secret/apps/statistics-service NATS_PASSWORD=$(vault kv get -field=STATS_SERVICE_PASSWORD secret/apps/nats)
 vault kv put secret/apps/mon-home-ass DB_PASSWORD=-
+vault kv patch secret/apps/mon-home-ass NATS_PASSWORD=$(vault kv get -field=MON_HOME_ASS_PASSWORD secret/apps/nats)
 ```
 
-`DB_PASSWORD` values are the role passwords from step 2. `kv put` creates the path; `kv patch` adds a key to an existing path. Details: [vault.md](vault.md), step 4.
+`DB_PASSWORD` values are the role passwords from step 2. The NATS passwords are generated and copied, nothing to type. `kv put` creates the path; `kv patch` adds a key to an existing path. Details: [vault.md](vault.md), step 4.
 
 External Secrets Operator retries on its own. To sync right away:
 
@@ -298,7 +302,8 @@ mon-home-ass reads Home Assistant data from Postgres. Its repo is private. Check
 - [ ] PAT with Contents read on `mon-home-ass` (step 1). Its GitRepository uses `secretRef: flux-system`, the PAT stored by the bootstrap.
 - [ ] Home Assistant writes to the `home_assistant` database; role `mon_home_ass` and `pg_hba.conf` lines ([postgres.md](postgres.md#home-assistant-database-mon-home-ass), step 2)
 - [ ] Image tag built by CI, GHCR package public (step 3)
-- [ ] `DB_PASSWORD` in Vault `secret/apps/mon-home-ass` (step 7)
+- [ ] `DB_PASSWORD` and `NATS_PASSWORD` in Vault `secret/apps/mon-home-ass` (step 7)
+- [ ] Statistics publisher, once statistics-service runs: import `definitions/home-assistant.json` into statistics-service, put the source token in Vault as `SOURCE_TOKEN`, restart mon-home-ass ([mon-home-ass `.devops/README.md`](https://github.com/jagieloadrian/mon-home-ass/blob/main/.devops/README.md#statistics-publisher-nats))
 
 Details: [mon-home-ass `.devops/README.md`](https://github.com/jagieloadrian/mon-home-ass/blob/main/.devops/README.md). URL: `http://mon-home-ass.home.arpa/`.
 

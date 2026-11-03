@@ -23,14 +23,15 @@ Changing `values` in `release.yaml` = new ConfigMap and pod restart (config chec
 | --- | --- | --- | --- |
 | `statistics-service` | `$JS.API.>`, `$JS.ACK.>`, `_INBOX.>` | `stats.ingest.>`, `_INBOX.>` | statistics-service: manages the stream and consumes |
 | `collector` | `stats.ingest.>` | `_INBOX_collector.>` | data-collecting applications (producers) |
+| `mon-home-ass` | `stats.ingest.home-assistant` | `_INBOX_mon_home_ass.>` | mon-home-ass: Home Assistant statistics for the source `home-assistant` |
 
 Without a password the server responds `Authorization Violation`; there is no anonymous user.
 
 A collector publishes to `stats.ingest.<sourceId>` with the header `Authorization: Bearer <source token>`. A plain publish (without acknowledgement) needs no subscription. A publish with JetStream acknowledgement requires the inbox prefix `_INBOX_collector` in the client (the "custom inbox prefix" option of NATS libraries, in the CLI `--inbox-prefix _INBOX_collector`). The default `_INBOX.>` is blocked for the collector, because through it the collector would see messages (including source tokens) delivered to statistics-service.
 
-Further collectors can share the `collector` user, because the source is identified by the token in the header anyway. A separate user: an entry in `config.merge.authorization.users` in `release.yaml` + a password in `nats-auth`.
+Further collectors can share the `collector` user, because the source is identified by the token in the header anyway. A separate user, like `mon-home-ass`, limits the app to its own subject: an entry in `config.merge.authorization.users` in `release.yaml` + a password in `secret/apps/nats`.
 
-Network (AuthorizationPolicy `nats`): port 4222 only from `cluster.local/ns/apps/sa/statistics-service`. For a collector running in the cluster, add `cluster.local/ns/apps/sa/<collector>` under `rules[0].from[0].source.principals` of AuthorizationPolicy `nats` in `apps/nats/release.yaml`.
+Network (AuthorizationPolicy `nats`): port 4222 only from `cluster.local/ns/apps/sa/statistics-service` and `cluster.local/ns/apps/sa/mon-home-ass`. For another collector running in the cluster, add `cluster.local/ns/apps/sa/<collector>` under `rules[0].from[0].source.principals` of AuthorizationPolicy `nats` in `apps/nats/release.yaml`.
 
 ## Secrets (once)
 
@@ -39,7 +40,8 @@ Requires a configured Vault ([vault.md](vault.md), steps 1–3; [setup.md](setup
 ```bash
 vault kv put secret/apps/nats \
   STATS_SERVICE_PASSWORD=$(openssl rand -hex 24) \
-  COLLECTOR_PASSWORD=$(openssl rand -hex 24)
+  COLLECTOR_PASSWORD=$(openssl rand -hex 24) \
+  MON_HOME_ASS_PASSWORD=$(openssl rand -hex 24)
 ```
 
 NATS reads an environment variable like a value in the config, so the password cannot be just a number (e.g. `12345` → startup error). Hex from `openssl` contains letters.
@@ -58,20 +60,19 @@ kubectl -n apps annotate externalsecret nats-auth force-sync=$(date +%s) --overw
 kubectl -n apps rollout restart statefulset/nats
 ```
 
-and the new password in the application (`STATS_SERVICE_PASSWORD`: statistics-service below).
+and the new password in the application: `STATS_SERVICE_PASSWORD` is `NATS_PASSWORD` of statistics-service (below), `MON_HOME_ASS_PASSWORD` is `NATS_PASSWORD` of mon-home-ass ([mon-home-ass `.devops/README.md`](https://github.com/jagieloadrian/mon-home-ass/blob/main/.devops/README.md#statistics-publisher-nats)).
 
 Without the keys in Vault, Secret `nats-auth` does not exist and pod `nats-0` waits in `CreateContainerConfigError`. HelmRelease `nats` keeps retrying the install (`install.remediation.retries: -1`), so it recovers on its own once the keys exist.
 
 ## statistics-service
 
-statistics-service starts with `BROKER: none`. `NATS_URL`, `NATS_USER` (`statistics-service`) and the other `NATS_*` values are already in `values.env` of its `.devops/helm/release.yaml`. To switch to the queue:
+statistics-service runs with `BROKER: jetstream`. `NATS_URL`, `NATS_USER` (`statistics-service`) and the other `NATS_*` values are in `values.env` of its `.devops/helm/release.yaml`. On start it creates the stream `STATS_INGEST` (subjects `stats.ingest.>`) and its durable consumer.
 
-1. Copy the password to statistics-service. `NATS_PASSWORD` must equal `STATS_SERVICE_PASSWORD`:
-   ```bash
-   vault kv patch secret/apps/statistics-service NATS_PASSWORD=$(vault kv get -field=STATS_SERVICE_PASSWORD secret/apps/nats)
-   kubectl -n apps annotate externalsecret statistics-service-secrets force-sync=$(date +%s) --overwrite
-   ```
-2. Set `BROKER: jetstream` in `values.env` and push to `main`. The rollout picks up the new Secret.
+`NATS_PASSWORD` in Vault must equal `STATS_SERVICE_PASSWORD` ([setup.md](setup.md), step 7, copies it). Without it the consumer keeps retrying and logs `jetstream broker unavailable`; the HTTP API works either way.
+
+## mon-home-ass
+
+mon-home-ass publishes Home Assistant statistics as the user `mon-home-ass` to `stats.ingest.home-assistant`, the subject of the statistics-service source `home-assistant`. Its `NATS_PASSWORD` must equal `MON_HOME_ASS_PASSWORD` ([setup.md](setup.md), step 7). It also needs `SOURCE_TOKEN`: [mon-home-ass `.devops/README.md`](https://github.com/jagieloadrian/mon-home-ass/blob/main/.devops/README.md#statistics-publisher-nats).
 
 ## Test
 
