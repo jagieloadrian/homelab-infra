@@ -195,7 +195,7 @@ Keep each role password in the password manager. They go to Vault in step 7.
 
 1. homelab-infra is on GitHub, and your changes are pushed to `main`. Flux reads `clusters/home` from `main`.
 2. In statistics-service, statistics-ui and mon-home-ass, open `.devops/helm/release.yaml` on `main`. The `image:` tag must be one that CI built and pushed to GHCR (GitHub → repo → Packages). A placeholder such as `main-00000000000000-0000000` means CI has not deployed yet: run the build workflow on `main`.
-3. CI pushes the tag commit to `main`. If `main` is protected by a ruleset, add GitHub Actions to the ruleset's bypass list. Otherwise the Deploy step fails (this happened in statistics-service).
+3. CI pushes the tag commit to `main`. statistics-service and mon-home-ass protect `main`, so CI pushes as a GitHub App on the ruleset bypass list: set it up once as in [apps.md](apps.md) (own app, step 3, "Protected `main`"). Without it the Deploy step fails.
 4. Make the GHCR packages `statistics-service`, `statistics-ui` and `mon-home-ass` public: GitHub → Packages → package → Package settings → Change visibility → Public. The cluster pulls images without logging in. A package appears only after its first successful CI build. Packages of a private repo (mon-home-ass) are private by default, but you can still make them public.
 
 ## 4. k3s
@@ -327,4 +327,4 @@ Back up, outside the homelab:
 | Pod `ImagePullBackOff` | GHCR package private, or the tag in `release.yaml` was never built (step 3) |
 | statistics-service keeps restarting, readiness 503 | no connection to Postgres: `pg_hba.conf`, `listen_addresses`, firewall, password (steps 2 and 7) |
 | `statistics.home.arpa` not responding | DNS wildcard → RPi5 IP (step 0); `kubectl -n istio-ingress get gateway home-gateway` |
-| CI Deploy step fails on `git push` | protected `main` without a bypass for GitHub Actions (step 3) |
+| CI Deploy step fails on `git push` | protected `main`: GitHub App not installed on the repo, `DEPLOY_APP_CLIENT_ID` / `DEPLOY_APP_PRIVATE_KEY` missing, or the App not on the ruleset bypass list (step 3) |

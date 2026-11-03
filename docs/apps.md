@@ -75,7 +75,21 @@ The shared chart [`charts/app`](../charts/app) renders ServiceAccount, Deploymen
    ```
    `install.remediation.retries: -1` makes Flux retry the first install until it works, for example until the Vault keys exist. `upgrade.remediation.retries: 3` retries a failed upgrade three times. `namespace` can be omitted, Flux enforces `apps`.
 2. Secrets (optional): `secrets: true`, and the keys (= env variable names) in Vault `secret/apps/<app>` ([vault.md](vault.md)). A secret change in Vault needs a restart ([vault.md](vault.md), "Change takes effect").
-3. In the app's build workflow: `permissions.contents: write` and a step after the image push:
+3. In the app's build workflow: `permissions.contents: write`, a checkout with the GitHub App token (only needed when `main` is protected, see below) and a step after the image push:
+   ```yaml
+         - uses: actions/create-github-app-token@v3
+           id: app-token
+           if: github.ref == 'refs/heads/main' && vars.DEPLOY_APP_CLIENT_ID != ''
+           with:
+             client-id: ${{ vars.DEPLOY_APP_CLIENT_ID }}
+             private-key: ${{ secrets.DEPLOY_APP_PRIVATE_KEY }}
+             permission-contents: write
+
+         - uses: actions/checkout@v7
+           with:
+             token: ${{ steps.app-token.outputs.token || github.token }}
+   ```
+   On pull requests, and on `main` while `DEPLOY_APP_CLIENT_ID` is not set, the App step is skipped and the checkout uses the normal `GITHUB_TOKEN` (enough when `main` is not protected, as in statistics-ui).
    ```yaml
          - name: Deploy (bump image tag)
            if: github.ref == 'refs/heads/main'
@@ -83,10 +97,19 @@ The shared chart [`charts/app`](../charts/app) renders ServiceAccount, Deploymen
              sed -i -E "s#(image: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}):[^[:space:]]+#\1:${{ steps.tag.outputs.tag }}#" .devops/helm/release.yaml
              git config user.name 'github-actions[bot]'
              git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-             git commit -am "chore(deploy): ${{ steps.tag.outputs.tag }}"
+             git commit -am "chore(deploy): ${{ steps.tag.outputs.tag }} [skip ci]"
              git pull --rebase && git push
    ```
-   A push with `GITHUB_TOKEN` does not trigger another workflow, so there is no loop. If `main` is protected by a ruleset, add GitHub Actions to its bypass list, or this push fails.
+   `[skip ci]` stops the tag commit from starting the build again (a push made with a GitHub App token triggers workflows, a push with `GITHUB_TOKEN` does not).
+
+   Protected `main`: GitHub's own Actions token cannot be put on a bypass list, so CI pushes as a GitHub App that can. One App serves all app repos:
+   1. GitHub → your profile → Settings → Developer settings → GitHub Apps → New GitHub App. Name: anything unique (e.g. `<owner>-ci-deploy`). Homepage URL: any (e.g. the repo URL). Webhook: untick **Active**. Repository permissions → Contents: **Read and write**. Where can this app be installed: **Only on this account**. Create.
+   2. On the App page: copy the **Client ID**, then Private keys → **Generate a private key** (downloads a `.pem`).
+   3. Install App → your account → **Only select repositories** → the app repos with a protected `main` (statistics-service, mon-home-ass; statistics-ui too if you protect its `main`).
+   4. In each of those repos: Settings → Secrets and variables → Actions. Variables tab: `DEPLOY_APP_CLIENT_ID` = the Client ID. Secrets tab: `DEPLOY_APP_PRIVATE_KEY` = the whole content of the `.pem`. Then delete the `.pem` (or keep it in a password manager).
+   5. Settings → Rules → Rulesets → the ruleset for `main` → Bypass list → Add bypass → the App → Save. If `main` uses a classic rule (Settings → Branches), either move it to a ruleset or add the App under "Allow specified actors to bypass required pull requests".
+
+   The bypass covers the whole branch, so whoever holds the App's private key can push to `main`. Keep it only in the repos' Actions secrets.
    Validation in app CI (`devops.yml`, example: statistics-service): check out `charts/` from this repo, `helm template` with the values from `release.yaml`, then `kubeconform`.
 4. Register it here: `scripts/new-app.sh own hello`, commit and push. This creates `clusters/home/apps/hello.yaml`: a GitRepository that reads only `.devops/helm/` from the app repo's `main`, and a Kustomization that applies it.
    Private app repo: add `secretRef: {name: flux-system}` to the GitRepository (example: `clusters/home/apps/mon-home-ass.yaml`). The GitHub PAT needs Contents read on that repo ([setup.md](setup.md), step 1).
