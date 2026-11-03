@@ -13,11 +13,12 @@ Homelab platform: 2-node k3s (RPi5 arm64 + Dell Wyse 5070 amd64), Istio ambient,
 | Shared Helm chart for own apps | `charts/app/` | Flux (HelmRelease from app repo) |
 | HelmRelease + values of own apps | `.devops/helm/` in app repo | Flux |
 | Ready-made apps (Helm chart, no build) | `apps/<name>/` | Flux |
-| NATS with JetStream: statistics-service ingest queue | `apps/nats/` | Flux (Helm) |
+| NATS with JetStream: statistics-service ingest queue (mon-home-ass publishes) | `apps/nats/` | Flux (Helm) |
 | App registration | `scripts/new-app.sh` | script |
 
 ## Guides
 
+- [Architecture](docs/architecture.md): diagrams of requests and data, delivery (CI, GHCR, Flux) and secrets
 - [Setup from scratch](docs/setup.md): prerequisites, `.env`, steps in order, operations
 - [Adding apps](docs/apps.md): own apps on `charts/app`, ready-made Helm charts
 - [Vault](docs/vault.md): app secrets, init, unseal, backup

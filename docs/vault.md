@@ -63,9 +63,9 @@ The key names are the env variable names. Generate passwords with `openssl rand 
 
 | Vault path | Keys |
 | --- | --- |
-| `secret/apps/statistics-service` | `DB_PASSWORD`, `ADMIN_PASSWORD`, `OIDC_CLIENT_SECRET` (may be empty), `NATS_PASSWORD` (`BROKER=jetstream`) |
-| `secret/apps/mon-home-ass` | `DB_PASSWORD` |
-| `secret/apps/nats` | `STATS_SERVICE_PASSWORD` (= `NATS_PASSWORD` of statistics-service), `COLLECTOR_PASSWORD` |
+| `secret/apps/statistics-service` | `DB_PASSWORD`, `ADMIN_PASSWORD`, `OIDC_CLIENT_SECRET` (may be empty), `NATS_PASSWORD` |
+| `secret/apps/mon-home-ass` | `DB_PASSWORD`, `NATS_PASSWORD`, `SOURCE_TOKEN` (token of the statistics-service source `home-assistant`) |
+| `secret/apps/nats` | `STATS_SERVICE_PASSWORD` (= `NATS_PASSWORD` of statistics-service), `COLLECTOR_PASSWORD`, `MON_HOME_ASS_PASSWORD` (= `NATS_PASSWORD` of mon-home-ass) |
 
 Commands for the first setup: [setup.md](setup.md), step 7. Examples:
 

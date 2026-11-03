@@ -53,6 +53,11 @@ spec:
               permissions:
                 publish: ["stats.ingest.>"]
                 subscribe: ["_INBOX_collector.>"]
+            - user: mon-home-ass
+              password: << $MON_HOME_ASS_PASSWORD >>
+              permissions:
+                publish: ["stats.ingest.home-assistant"]
+                subscribe: ["_INBOX_mon_home_ass.>"]
     container:
       env:
         GOMEMLIMIT: 200MiB
@@ -125,6 +130,7 @@ spec:
         - source:
             principals:
               - cluster.local/ns/apps/sa/statistics-service
+              - cluster.local/ns/apps/sa/mon-home-ass
       to:
         - operation:
             ports: ["4222"]

@@ -11,7 +11,7 @@ Where things live. Step-by-step setup: [setup.md](setup.md).
 | Configuration | `values.env` in `.devops/helm/release.yaml` → ConfigMap | none |
 | Secrets | Vault `secret/apps/statistics-service` (`secrets: true`) → ExternalSecret → Secret ([vault.md](vault.md)) | none |
 | Database | Postgres on Wyse, database and schema `statistics` ([postgres.md](postgres.md)) | none |
-| Queue | `BROKER: none` now; NATS JetStream `nats.apps.svc.cluster.local:4222` with `BROKER=jetstream` ([nats.md](nats.md)) | none |
+| Queue | NATS JetStream `nats.apps.svc.cluster.local:4222` (`BROKER: jetstream`, [nats.md](nats.md)) | none |
 | Deploy | CI on `main`: Jib image → tag commit to `.devops/helm/release.yaml` | CI on `main`: buildx image → tag commit to `.devops/helm/release.yaml` |
 
 Registrations point to `.devops/helm`, not `.devops`. Next to it in `.devops/` there are compose files (`authelia-compose/`, `postgres-compose/`), which Flux cannot apply.
