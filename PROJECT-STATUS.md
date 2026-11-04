@@ -27,6 +27,10 @@
 - Deploy readiness for a clean-slate bring-up: k3s channel `v1.36`; app GitRepositories poll once a day (`interval: 24h`), deploy now with `flux reconcile kustomization <app> -n flux-system --with-source`; Flux Kustomizations `retryInterval: 1m`; NATS HelmRelease `install.remediation.retries: -1` (waits for `secret/apps/nats`); own-app HelmReleases in the app repos `install.remediation.retries: -1` + `upgrade.remediation.retries: 3`. No `flux reconcile --force` after Vault setup.
 - Docs for a from-scratch setup: prerequisites (OS, SSH/sudo, cgroups, firewall, DNS, tools), `.env` table, wait before Vault init, concrete Vault commands, verification with expected output, login check, operations (unseal after reboot, PAT rotation, backups). App guide moved from README to `docs/apps.md` (chart values, ready-made checklist, `valuesFrom` from Vault). Home Assistant database for mon-home-ass in `docs/postgres.md`. User-visible messages in `scripts/new-app.sh`, Terraform and CI in English.
 
+## Done (2026-11-04), `feature-8/server-mcp-kotlin` (not merged)
+
+- server-mcp-kotlin registered as an own app (`clusters/home/apps/server-mcp-kotlin.yaml`, public repo, no `secretRef`). It serves the coding standards to Claude Code over MCP Streamable HTTP at `server-mcp-kotlin.home.arpa/mcp`; the standards are baked into the image, no secrets. Shown in `docs/architecture.md`.
+
 ## Decisions
 
 - Terraform only does the machines and the bootstrap. Everything in the cluster goes through GitOps (Flux), which avoids the CRD problem in the Terraform plan and matches the contract ("Git as the source of truth").
@@ -46,6 +50,7 @@
 ## Next steps
 
 - First live bring-up per `docs/setup.md` (steps 0–9); fix the docs wherever reality differs.
+- server-mcp-kotlin: merge its `feature-2/homelab-deploy` PR, first CI build on `main`, GHCR package public, then merge this branch.
 - mon-home-ass: first CI build on `main` (replaces the placeholder image tag), GHCR package public, Home Assistant recorder on Postgres `home_assistant`. NATS publishing is off for now (`NATS_URL` removed); bringing it back needs a NATS user and its principal in AuthorizationPolicy `nats`.
 - statistics-service: switch to `BROKER: jetstream` when ingest is needed (`docs/nats.md`).
 - Optional: Reloader for an automatic rollout on secret change; AuthorizationPolicy for Vault in a later Flux layer (after the Istio CRDs).
