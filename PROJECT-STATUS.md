@@ -31,11 +31,16 @@
 
 - server-mcp-kotlin registered as an own app (`clusters/home/apps/server-mcp-kotlin.yaml`, public repo, no `secretRef`). It serves the coding standards to Claude Code over MCP Streamable HTTP at `server-mcp-kotlin.home.arpa/mcp`; the standards are baked into the image, no secrets. Shown in `docs/architecture.md`.
 
+## Done (2026-11-04), `feature-9/ssh-key-only` (not merged)
+
+- Step 0 of `docs/setup.md`: key-only SSH (`/etc/ssh/sshd_config.d/10-key-only.conf`, checked with `sshd -T` against a conflicting `50-cloud-init.conf`) and a passphrase on the key, plus why Terraform needs passwordless sudo.
+
 ## Decisions
 
 - Terraform only does the machines and the bootstrap. Everything in the cluster goes through GitOps (Flux), which avoids the CRD problem in the Terraform plan and matches the contract ("Git as the source of truth").
 - Two Terraform directories, because the k8s/flux provider needs a kubeconfig that only comes into existence in the k3s stage.
 - Flux authenticates with a fine-grained PAT over HTTPS instead of a deploy key: one provider fewer.
+- Terraform stays for k3s and Flux (2026-11-04), with passwordless sudo, because `remote-exec` has no terminal. The SSH key with a passphrase is the only lock; password login over SSH is off.
 - Istio `1.30.x`, because 1.31 is in the Helm repo only as RC (the contract assumes 1.31).
 - The Flux repo is `homelab-infra`, while the contract says `homelab`.
 - HelmRelease in `.devops/helm/` of the app repo, not here. CI bumps the tag in `.devops/` with a commit using `GITHUB_TOKEN`, so Flux only reads. No image automation (contract updated).

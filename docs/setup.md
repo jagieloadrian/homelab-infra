@@ -26,7 +26,7 @@ ssh-copy-id <user>@<RPi5 IP>
 ssh-copy-id <user>@<Wyse IP>
 ```
 
-On each host, allow sudo without a password. Run `sudo visudo -f /etc/sudoers.d/<user>` and add this line:
+On each host, allow sudo without a password. Terraform installs k3s over SSH without a terminal, so sudo can't ask for one. Raspberry Pi OS already does this for its first user (`/etc/sudoers.d/010_pi-nopasswd`). Otherwise run `sudo visudo -f /etc/sudoers.d/<user>` and add this line:
 
 ```
 <user> ALL=(ALL) NOPASSWD: ALL
@@ -45,6 +45,17 @@ Host wyse
 ```
 
 Terraform does not use these names. It reads the IPs from `.env` (step 1).
+
+With passwordless sudo, whoever logs in as this user is root, so the SSH key is the only lock. Allow only key login, and put a passphrase on the key:
+
+```bash
+ssh rpi 'printf "PasswordAuthentication no\nKbdInteractiveAuthentication no\n" | sudo tee /etc/ssh/sshd_config.d/10-key-only.conf && sudo systemctl reload ssh'
+ssh wyse 'printf "PasswordAuthentication no\nKbdInteractiveAuthentication no\n" | sudo tee /etc/ssh/sshd_config.d/10-key-only.conf && sudo systemctl reload ssh'
+ssh -o PubkeyAuthentication=no rpi
+ssh-keygen -p -f ~/.ssh/id_ed25519
+```
+
+The third command must fail with `Permission denied (publickey)`. The last one sets the passphrase; `ssh-agent` asks for it once per login session.
 
 ### RPi5: memory cgroups
 
