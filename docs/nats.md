@@ -35,7 +35,7 @@ Network (AuthorizationPolicy `nats`): port 4222 only from `cluster.local/ns/apps
 
 ## Secrets (once)
 
-Requires a configured Vault ([vault.md](vault.md), steps 1–3; [setup.md](setup.md), steps 6–7).
+Requires a configured Vault ([setup.md](setup.md), step 4).
 
 ```bash
 vault kv put secret/apps/nats \
@@ -68,11 +68,11 @@ Without the keys in Vault, Secret `nats-auth` does not exist and pod `nats-0` wa
 
 statistics-service runs with `BROKER: jetstream`. `NATS_URL`, `NATS_USER` (`statistics-service`) and the other `NATS_*` values are in `values.env` of its `.devops/helm/release.yaml`. On start it creates the stream `STATS_INGEST` (subjects `stats.ingest.>`) and its durable consumer.
 
-`NATS_PASSWORD` in Vault must equal `STATS_SERVICE_PASSWORD` ([setup.md](setup.md), step 7, copies it). Without it the consumer keeps retrying and logs `jetstream broker unavailable`; the HTTP API works either way.
+`NATS_PASSWORD` in Vault must equal `STATS_SERVICE_PASSWORD` (`scripts/install.sh` copies it, [setup.md](setup.md), step 4). Without it the consumer keeps retrying and logs `jetstream broker unavailable`; the HTTP API works either way.
 
 ## mon-home-ass
 
-mon-home-ass publishes Home Assistant statistics as the user `mon-home-ass` to `stats.ingest.home-assistant`, the subject of the statistics-service source `home-assistant`. Its `NATS_PASSWORD` must equal `MON_HOME_ASS_PASSWORD` ([setup.md](setup.md), step 7). It also needs `SOURCE_TOKEN`: [mon-home-ass `.devops/README.md`](https://github.com/jagieloadrian/mon-home-ass/blob/main/.devops/README.md#statistics-publisher-nats).
+mon-home-ass publishes Home Assistant statistics as the user `mon-home-ass` to `stats.ingest.home-assistant`, the subject of the statistics-service source `home-assistant`. Its `NATS_PASSWORD` must equal `MON_HOME_ASS_PASSWORD` (`scripts/install.sh` copies it, [setup.md](setup.md), step 4). It also needs `SOURCE_TOKEN`: [mon-home-ass `.devops/README.md`](https://github.com/jagieloadrian/mon-home-ass/blob/main/.devops/README.md#statistics-publisher-nats).
 
 ## Test
 

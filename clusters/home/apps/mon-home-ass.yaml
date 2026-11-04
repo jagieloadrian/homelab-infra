@@ -8,8 +8,6 @@ spec:
   url: https://github.com/jagieloadrian/mon-home-ass
   ref:
     branch: main
-  secretRef:
-    name: flux-system
   ignore: |
     /*
     !/.devops/helm/

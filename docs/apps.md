@@ -112,7 +112,7 @@ The shared chart [`charts/app`](../charts/app) renders ServiceAccount, Deploymen
    The bypass covers the whole branch, so whoever holds the App's private key can push to `main`. Keep it only in the repos' Actions secrets.
    Validation in app CI (`devops.yml`, example: statistics-service): check out `charts/` from this repo, `helm template` with the values from `release.yaml`, then `kubeconform`.
 4. Register it here: `scripts/new-app.sh own hello`, commit and push. This creates `clusters/home/apps/hello.yaml`: a GitRepository that reads only `.devops/helm/` from the app repo's `main`, and a Kustomization that applies it.
-   Private app repo: add `secretRef: {name: flux-system}` to the GitRepository (example: `clusters/home/apps/mon-home-ass.yaml`). The GitHub PAT needs Contents read on that repo ([setup.md](setup.md), step 1).
+   Private app repo: add `secretRef: {name: flux-system}` to the GitRepository, and give the GitHub PAT Contents read on that repo ([setup.md](setup.md), step 1).
 5. Make the GHCR package public after the first CI build ([setup.md](setup.md), step 3).
 
 Local preview of the rendered manifests, from the app repo:

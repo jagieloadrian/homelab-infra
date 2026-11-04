@@ -1,6 +1,6 @@
 # Setting up the homelab from scratch
 
-Do steps 0–9 in this order. At the end, k3s runs on the RPi5 and the Wyse with Flux and Istio. `http://statistics.home.arpa/` serves statistics-ui and statistics-service, with the database in Postgres on the Wyse. Flux also deploys NATS and mon-home-ass.
+Do steps 0–6 in this order. Step 4 is one script. At the end, k3s runs on the RPi5 and the Wyse with Flux and Istio. `http://statistics.home.arpa/` serves statistics-ui and statistics-service, with the database in Postgres on the Wyse. Flux also deploys NATS and mon-home-ass.
 
 In commands, `<homelab-infra checkout>` is the directory where you cloned this repo.
 
@@ -59,10 +59,10 @@ The third command must fail with `Permission denied (publickey)`. The last one s
 
 ### RPi5: memory cgroups
 
-k3s needs memory cgroups. `/boot/firmware/cmdline.txt` holds a single line. Add `cgroup_memory=1 cgroup_enable=memory` to the end of that existing line, separated by a space. Do not add a new line. Then reboot:
+k3s needs memory cgroups. The first command adds `cgroup_memory=1 cgroup_enable=memory` to the end of the single line in `/boot/firmware/cmdline.txt`, unless it is already there:
 
 ```bash
-ssh -t rpi sudo nano /boot/firmware/cmdline.txt
+ssh rpi "grep -q cgroup_enable=memory /boot/firmware/cmdline.txt || sudo sed -i '1 s/\$/ cgroup_memory=1 cgroup_enable=memory/' /boot/firmware/cmdline.txt"
 ssh rpi sudo reboot
 ```
 
@@ -109,10 +109,10 @@ getent hosts statistics.home.arpa
 | Tool | Used for |
 | --- | --- |
 | `git` | this repo and the app repos |
-| `terraform` ≥ 1.6 | steps 4 and 5 |
+| `terraform` ≥ 1.6 | step 4 |
 | `kubectl` | everything in the cluster |
 | `flux` CLI | Flux status (`flux get ...`) |
-| `vault` CLI | Vault configuration and secrets ([vault.md](vault.md), steps 3–4) |
+| `vault` CLI | changing secrets later ([vault.md](vault.md), steps 3–4). Step 4 does not need it. |
 | `openssl` | generating passwords |
 | `curl` | checks |
 | `helm`, `yq` | adding apps ([apps.md](apps.md)) |
@@ -134,8 +134,6 @@ Create `.env` in the homelab-infra root directory and fill in the empty values:
 TF_VAR_rpi_host=
 TF_VAR_wyse_host=
 TF_VAR_ssh_user=
-TF_VAR_ssh_private_key=~/.ssh/id_ed25519
-TF_VAR_wyse_system_reserved_memory=4Gi
 TF_VAR_github_token=
 ```
 
@@ -144,16 +142,12 @@ TF_VAR_github_token=
 | `TF_VAR_rpi_host` | `terraform/k3s` | RPi5 IP. The k3s server, and the target of the `*.home.arpa` DNS wildcard. |
 | `TF_VAR_wyse_host` | `terraform/k3s`, `terraform/flux` | Wyse IP. The k3s agent and the Postgres host. In the cluster it is `${WYSE_IP}` (below). |
 | `TF_VAR_ssh_user` | `terraform/k3s` | the user with SSH key login and passwordless sudo on both hosts (step 0) |
-| `TF_VAR_ssh_private_key` | `terraform/k3s` | private key of that user |
-| `TF_VAR_wyse_system_reserved_memory` | `terraform/k3s` | Wyse RAM kept for Home Assistant and Postgres, outside the pods. `4Gi` on an 8 GB Wyse leaves about 3.4 GiB for pods. |
-| `TF_VAR_github_token` | `terraform/flux` | fine-grained PAT. Repository access: `homelab-infra` with Contents read and write (the bootstrap commits to it), `mon-home-ass` with Contents read (private repo). |
+| `TF_VAR_ssh_private_key` | `terraform/k3s` | optional, private key of that user. Default `~/.ssh/id_ed25519`. |
+| `TF_VAR_wyse_system_reserved_memory` | `terraform/k3s` | optional, default `4Gi`. Wyse RAM kept for Home Assistant and Postgres, outside the pods. `4Gi` on an 8 GB Wyse leaves about 3.4 GiB for pods. |
+| `TF_VAR_github_token` | `terraform/flux` | fine-grained PAT. Repository access: `homelab-infra` with Contents read and write (the bootstrap commits to it). The app repos are public, Flux reads them without a token. |
 | `TF_VAR_github_owner` | `terraform/flux` | optional, only for a fork: your GitHub user. Default `jagieloadrian`. |
 
-Terraform reads `TF_VAR_<name>` as variable `<name>`. Load the file in the shell before every `terraform` command:
-
-```bash
-set -a; . ./.env; set +a
-```
+Terraform reads `TF_VAR_<name>` as variable `<name>`. `scripts/install.sh` loads the file. Before a `terraform` command of your own, load it in the shell: `set -a; . ./.env; set +a`.
 
 `terraform/flux` stores `TF_VAR_wyse_host` in ConfigMap `flux-system/cluster-vars` as `WYSE_IP`. Flux substitutes `${WYSE_IP}` in `infrastructure/postgres.yaml`. This keeps the IP out of git.
 
@@ -192,7 +186,7 @@ statistics-ui has no environment variables. It is a static frontend, and the gat
 | `secret/apps/nats` | `STATS_SERVICE_PASSWORD`, `COLLECTOR_PASSWORD`, `MON_HOME_ASS_PASSWORD` | NATS user passwords. Required: NATS is always deployed. |
 | `secret/apps/mon-home-ass` | `DB_PASSWORD` | password of the `mon_home_ass` role (step 2) |
 | | `NATS_PASSWORD` | copy of `MON_HOME_ASS_PASSWORD` |
-| | `SOURCE_TOKEN` | token of the statistics-service source `home-assistant`, added after step 9 ([mon-home-ass](#mon-home-ass) below). Until then the publisher stays off. |
+| | `SOURCE_TOKEN` | token of the statistics-service source `home-assistant`, added after step 6 ([mon-home-ass](#mon-home-ass) below). Until then the publisher stays off. |
 
 ## 2. Postgres on Wyse
 
@@ -202,7 +196,7 @@ Follow [postgres.md](postgres.md):
 2. "Each application" with `<app>` = `statistics`.
 3. "Home Assistant database (mon-home-ass)".
 
-Keep each role password in the password manager. They go to Vault in step 7.
+Keep each role password in the password manager. Step 4 asks for them and puts them in Vault.
 
 ## 3. GitHub: repos and images
 
@@ -211,76 +205,31 @@ Keep each role password in the password manager. They go to Vault in step 7.
 3. CI pushes the tag commit to `main`. statistics-service and mon-home-ass protect `main`, so CI pushes as a GitHub App on the ruleset bypass list: set it up once as in [apps.md](apps.md) (own app, step 3, "Protected `main`"). Without it the Deploy step fails.
 4. Make the GHCR packages `statistics-service`, `statistics-ui` and `mon-home-ass` public: GitHub → Packages → package → Package settings → Change visibility → Public. The cluster pulls images without logging in. A package appears only after its first successful CI build. Packages of a private repo (mon-home-ass) are private by default, but you can still make them public.
 
-## 4. k3s
+## 4. Install: k3s, Flux, Vault
 
 ```bash
 cd <homelab-infra checkout>
-set -a; . ./.env; set +a
-cd terraform/k3s
-terraform init
-terraform apply
-export KUBECONFIG=<homelab-infra checkout>/terraform/kubeconfig
-kubectl get nodes -L homelab/node
-```
-
-`terraform apply` installs the k3s server on the RPi5 and joins the Wyse as an agent. It writes the cluster credentials to `terraform/kubeconfig`. Keep the `KUBECONFIG` export in this shell: all later steps and the other docs need it. Both nodes must be `Ready`.
-
-## 5. Flux
-
-In the same shell (`.env` is loaded):
-
-```bash
-cd ../flux
-terraform init
-terraform apply
-cd ../..
+scripts/install.sh
 git pull
+export KUBECONFIG=<homelab-infra checkout>/terraform/kubeconfig
 ```
 
-`terraform apply` installs Flux and creates ConfigMap `flux-system/cluster-vars`. The bootstrap commits `clusters/home/flux-system` to `main` on GitHub. `git pull` brings that commit into your checkout, so your next push does not conflict.
+`scripts/install.sh` does, in order:
 
-Flux then deploys the rest on its own: Gateway API, Istio, `home-gateway`, the `apps` namespace, the `postgres` Service, Vault + External Secrets Operator, Kiali, NATS, statistics-service, statistics-ui and mon-home-ass.
+1. `terraform apply` in `terraform/k3s`: the k3s server on the RPi5, the Wyse joins as an agent, the cluster credentials go to `terraform/kubeconfig`. Then `terraform apply` in `terraform/flux`: Flux and ConfigMap `flux-system/cluster-vars`. Each apply shows its plan and asks for `yes`; `scripts/install.sh -auto-approve` skips that.
+2. It waits until Flux has started `vault-0` (first run: a few minutes). Flux deploys the rest on its own: Gateway API, Istio, `home-gateway`, the `apps` namespace, the `postgres` Service, Vault + External Secrets Operator, Kiali, NATS and the apps.
+3. First run only: it initializes Vault and prints the unseal key and the root token. Put both in the password manager before you press Enter; without the unseal key every secret is lost. Then it unseals and configures Vault ([vault.md](vault.md), step 1) and asks for three passwords: the Postgres roles `statistics` and `mon_home_ass` (step 2) and the statistics-service admin (empty = no local admin). It generates the NATS passwords. The keys it writes: [Vault keys](#vault-keys) above.
+4. Later runs: Terraform shows no changes, and a sealed Vault asks for the unseal key. The same command brings the cluster back after a reboot.
 
-Wait until `infrastructure` shows `Ready True` (first run: a few minutes; Ctrl+C to stop watching):
+`git pull` brings in the commit the Flux bootstrap made to `main` (`clusters/home/flux-system`), so your next push does not conflict. All later steps and the other docs need the `KUBECONFIG` export; add it to `~/.bashrc`.
 
-```bash
-flux get kustomizations --watch
-kubectl -n vault get pod vault-0
-```
-
-`vault-0` must be `Running`. It shows `Ready` even while it is sealed. This is on purpose, so `infrastructure` can finish before Vault is set up.
-
-NATS, statistics-service and mon-home-ass wait in `CreateContainerConfigError` until their secrets exist (step 7). Their HelmReleases keep retrying, so nothing needs a manual kick afterwards.
-
-## 6. Vault: init, unseal, configuration
-
-[vault.md](vault.md), steps 1–3.
-
-## 7. App secrets in Vault
-
-Use the same shell as step 6 (port-forward, `VAULT_ADDR`, `vault login`). In a new shell, repeat those three lines from [vault.md](vault.md), step 3. Each `KEY=-` reads the value from stdin: type it, then press Ctrl+D twice. Do not press Enter, it would become part of the value. The value stays out of shell history.
-
-```bash
-vault kv put secret/apps/nats STATS_SERVICE_PASSWORD=$(openssl rand -hex 24) COLLECTOR_PASSWORD=$(openssl rand -hex 24) MON_HOME_ASS_PASSWORD=$(openssl rand -hex 24)
-vault kv put secret/apps/statistics-service DB_PASSWORD=-
-vault kv patch secret/apps/statistics-service ADMIN_PASSWORD=-
-vault kv patch secret/apps/statistics-service OIDC_CLIENT_SECRET=""
-vault kv patch secret/apps/statistics-service NATS_PASSWORD=$(vault kv get -field=STATS_SERVICE_PASSWORD secret/apps/nats)
-vault kv put secret/apps/mon-home-ass DB_PASSWORD=-
-vault kv patch secret/apps/mon-home-ass NATS_PASSWORD=$(vault kv get -field=MON_HOME_ASS_PASSWORD secret/apps/nats)
-```
-
-`DB_PASSWORD` values are the role passwords from step 2. The NATS passwords are generated and copied, nothing to type. `kv put` creates the path; `kv patch` adds a key to an existing path. Details: [vault.md](vault.md), step 4.
-
-External Secrets Operator retries on its own. To sync right away:
+External Secrets Operator then creates the app Secrets, and NATS, statistics-service and mon-home-ass start. Their HelmReleases turn `Ready` within about 10 minutes (`flux get helmreleases -n apps`). To sync the Secrets right away:
 
 ```bash
 kubectl -n apps annotate externalsecret --all force-sync=$(date +%s) --overwrite
 ```
 
-The pods start once their Secrets exist. The HelmReleases turn `Ready` within about 10 minutes (`flux get helmreleases -n apps`).
-
-## 8. Verification
+## 5. Verification
 
 | Command | Expected |
 | --- | --- |
@@ -298,22 +247,17 @@ kubectl -n apps run psql --rm -it --restart=Never --image=postgres:16 -- \
   psql "postgresql://statistics@postgres.apps.svc.cluster.local:5432/statistics" -c 'show search_path'
 ```
 
-## 9. Log in
+## 6. Log in
 
-Open `http://statistics.home.arpa/` in a browser. Log in with `ADMIN_EMAIL` from statistics-service's `.devops/helm/release.yaml` (`admin@home.arpa`) and `ADMIN_PASSWORD` from Vault:
-
-```bash
-vault kv get -field=ADMIN_PASSWORD secret/apps/statistics-service
-```
+Open `http://statistics.home.arpa/` in a browser. Log in with `ADMIN_EMAIL` from statistics-service's `.devops/helm/release.yaml` (`admin@home.arpa`) and the admin password you typed in step 4.
 
 ## mon-home-ass
 
-mon-home-ass reads Home Assistant data from Postgres. Its repo is private. Checklist, all covered by the steps above:
+mon-home-ass reads Home Assistant data from Postgres. Checklist, all covered by the steps above:
 
-- [ ] PAT with Contents read on `mon-home-ass` (step 1). Its GitRepository uses `secretRef: flux-system`, the PAT stored by the bootstrap.
 - [ ] Home Assistant writes to the `home_assistant` database; role `mon_home_ass` and `pg_hba.conf` lines ([postgres.md](postgres.md#home-assistant-database-mon-home-ass), step 2)
 - [ ] Image tag built by CI, GHCR package public (step 3)
-- [ ] `DB_PASSWORD` and `NATS_PASSWORD` in Vault `secret/apps/mon-home-ass` (step 7)
+- [ ] `DB_PASSWORD` and `NATS_PASSWORD` in Vault `secret/apps/mon-home-ass` (step 4)
 - [ ] Statistics publisher, once statistics-service runs: import `definitions/home-assistant.json` into statistics-service, put the source token in Vault as `SOURCE_TOKEN`, restart mon-home-ass ([mon-home-ass `.devops/README.md`](https://github.com/jagieloadrian/mon-home-ass/blob/main/.devops/README.md#statistics-publisher-nats))
 
 Details: [mon-home-ass `.devops/README.md`](https://github.com/jagieloadrian/mon-home-ass/blob/main/.devops/README.md). URL: `http://mon-home-ass.home.arpa/`.
@@ -323,7 +267,7 @@ Details: [mon-home-ass `.devops/README.md`](https://github.com/jagieloadrian/mon
 | When | What to do |
 | --- | --- |
 | CI bumped an image tag and you want it live now | Flux checks app repos once a day. Run `flux reconcile kustomization <app> -n flux-system --with-source` (`<app>` = statistics-service, statistics-ui or mon-home-ass). |
-| After every RPi5 reboot or `vault-0` restart | Vault is sealed. Check with `kubectl -n vault exec vault-0 -- vault status` (`Sealed true`), then unseal ([vault.md](vault.md), step 2). |
+| After every RPi5 reboot or `vault-0` restart | Vault is sealed. Run `scripts/install.sh` again: it asks for the unseal key. Or by hand: [vault.md](vault.md), step 2. |
 | GitHub PAT expires | Create a new PAT with the same access (step 1). Replace the copy Flux uses: `flux create secret git flux-system -n flux-system --url=https://github.com/jagieloadrian/homelab-infra --username=git --password=<new PAT>` (it updates the existing Secret). Put the same token in `.env` (`TF_VAR_github_token`) for later Terraform runs. |
 | Vault data lost | Restore the PVC directory and unseal ([vault.md](vault.md), "Backup and restore"). |
 | Postgres backup | [postgres.md](postgres.md), "Backup" |
@@ -338,9 +282,10 @@ Back up, outside the homelab:
 
 | Symptom | Cause / where to look |
 | --- | --- |
-| `infrastructure` not Ready | `kubectl -n flux-system describe kustomization infrastructure`. Missing ConfigMap `cluster-vars` → step 5. |
+| `infrastructure` not Ready | `kubectl -n flux-system describe kustomization infrastructure`. Missing ConfigMap `cluster-vars` → step 4. |
+| `scripts/install.sh` stopped after printing the Vault keys | Vault is initialized but not configured and holds no data. Start Vault over: `kubectl -n vault delete pvc data-vault-0 --wait=false && kubectl -n vault delete pod vault-0`, then run the script again. |
 | `ExternalSecret` not `SecretSynced` | [vault.md](vault.md), "Check": Vault sealed after a restart, key missing |
 | Pod `ImagePullBackOff` | GHCR package private, or the tag in `release.yaml` was never built (step 3) |
-| statistics-service keeps restarting, readiness 503 | no connection to Postgres: `pg_hba.conf`, `listen_addresses`, firewall, password (steps 2 and 7) |
+| statistics-service keeps restarting, readiness 503 | no connection to Postgres: `pg_hba.conf`, `listen_addresses`, firewall, password (steps 2 and 4) |
 | `statistics.home.arpa` not responding | DNS wildcard → RPi5 IP (step 0); `kubectl -n istio-ingress get gateway home-gateway` |
 | CI Deploy step fails on `git push` | protected `main`: GitHub App not installed on the repo, `DEPLOY_APP_CLIENT_ID` / `DEPLOY_APP_PRIVATE_KEY` missing, or the App not on the ruleset bypass list (step 3) |

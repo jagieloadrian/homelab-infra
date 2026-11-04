@@ -14,6 +14,7 @@ Homelab platform: 2-node k3s (RPi5 arm64 + Dell Wyse 5070 amd64), Istio ambient,
 | HelmRelease + values of own apps | `.devops/helm/` in app repo | Flux |
 | Ready-made apps (Helm chart, no build) | `apps/<name>/` | Flux |
 | NATS with JetStream: statistics-service ingest queue (mon-home-ass publishes) | `apps/nats/` | Flux (Helm) |
+| Install: k3s, Flux, Vault init + config + first secrets | `scripts/install.sh` | script ([setup.md](docs/setup.md), step 4) |
 | App registration | `scripts/new-app.sh` | script |
 
 ## Guides

@@ -35,6 +35,11 @@
 
 - Step 0 of `docs/setup.md`: key-only SSH (`/etc/ssh/sshd_config.d/10-key-only.conf`, checked with `sshd -T` against a conflicting `50-cloud-init.conf`) and a passphrase on the key, plus why Terraform needs passwordless sudo.
 
+## Done (2026-11-04), `feature-10/one-command-install` (not merged)
+
+- `scripts/install.sh`: one command for the whole platform. Both `terraform apply` runs (args passed through, e.g. `-auto-approve`), waits for `vault-0`, on the first run Vault init, unseal, configuration (kv-v2, Kubernetes auth, policy, role) and the first app secrets (asks for the two Postgres role passwords and the admin password, generates the NATS passwords). Later runs only unseal a sealed Vault. Everything goes through `kubectl exec` into `vault-0`, values via stdin; no port-forward or local `vault` CLI. Tested against Vault 1.18 in Docker with kubectl/terraform shims: first run, rerun after restart (unseal), special characters in passwords, NATS copies equal, token file removed.
+- `docs/setup.md`: steps 4–7 merged into step 4, steps now 0–6. `.env` template has 4 values (SSH key and Wyse reserve have defaults). cgroups as one idempotent command. PAT needs only `homelab-infra` (mon-home-ass GitRepository without `secretRef`, the repo is public). `docs/vault.md` step 1 describes what the script does, step 3 is laptop access only.
+
 ## Decisions
 
 - Terraform only does the machines and the bootstrap. Everything in the cluster goes through GitOps (Flux), which avoids the CRD problem in the Terraform plan and matches the contract ("Git as the source of truth").

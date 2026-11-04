@@ -21,4 +21,4 @@ Registrations point to `.devops/helm`, not `.devops`. Next to it in `.devops/` t
 - [ ] Role and schema `statistics` on Wyse ([setup.md](setup.md), step 2)
 - [ ] `image:` in `.devops/helm/release.yaml` on `main` is a tag CI built and pushed to GHCR, in both repos (step 3)
 - [ ] GHCR packages public; GitHub App installed + `DEPLOY_APP_CLIENT_ID` / `DEPLOY_APP_PRIVATE_KEY` + App on the ruleset bypass list where `main` is protected, or the CI Deploy step fails ([apps.md](apps.md), own app, step 3)
-- [ ] Keys in Vault `secret/apps/statistics-service` (step 7). Without them the statistics-service pod won't start.
+- [ ] Keys in Vault `secret/apps/statistics-service` (step 4). Without them the statistics-service pod won't start.
