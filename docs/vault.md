@@ -13,15 +13,15 @@ External Secrets Operator (ESO) copies Vault `secret/apps/<app>` (KV v2) into Se
 
 Locally: the `vault` CLI (or run the same commands inside `kubectl -n vault exec -it vault-0 -- sh`), and `KUBECONFIG` set to `<homelab-infra checkout>/terraform/kubeconfig`.
 
-## 1. Init (once)
+## 1. Init and configuration (once)
 
-Start when `kubectl -n vault get pod vault-0` shows `Running` ([setup.md](setup.md), step 5). The pod shows `Ready` even while sealed, on purpose.
+`scripts/install.sh` does this on its first run ([setup.md](setup.md), step 4), inside `vault-0` with `kubectl exec`:
 
-```bash
-kubectl -n vault exec -it vault-0 -- vault operator init -key-shares=1 -key-threshold=1
-```
+- `vault operator init` with one key share. It prints the unseal key and the root token once. Put both in a password manager. Without the unseal key, every secret is lost.
+- Unseal, then the kv-v2 engine at `secret/`, Kubernetes auth, policy `apps-read` (read `secret/data/apps/*`) and role `apps` for ServiceAccount `apps/vault-reader`.
+- The first app secrets (step 4).
 
-It prints `Unseal Key 1` and `Initial Root Token`. Put both in a password manager. Without the unseal key, every secret is lost.
+ESO logs in with a token of ServiceAccount `apps/vault-reader` and can only read `secret/apps/*`. The pod shows `Ready` even while sealed, on purpose: `infrastructure` can finish before Vault is set up.
 
 ## 2. Unseal (after init and after every restart of the Vault pod)
 
@@ -30,32 +30,19 @@ kubectl -n vault exec -it vault-0 -- vault operator unseal
 kubectl -n vault exec vault-0 -- vault status
 ```
 
-Paste `Unseal Key 1` at the prompt. `vault status` must show `Sealed false`.
+Paste the unseal key at the prompt. `vault status` must show `Sealed false`. `scripts/install.sh` does the same when Vault is sealed.
 
 While Vault is sealed, the Secrets already in the cluster keep working. ESO just can't create or refresh them.
 
-## 3. Configuration (once)
+## 3. Access from the laptop
 
 ```bash
 kubectl -n vault port-forward svc/vault 8200 &
 export VAULT_ADDR=http://127.0.0.1:8200
 vault login
-
-vault secrets enable -path=secret kv-v2
-vault auth enable kubernetes
-vault write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc
-vault policy write apps-read - <<'EOF'
-path "secret/data/apps/*" { capabilities = ["read"] }
-EOF
-vault write auth/kubernetes/role/apps \
-  bound_service_account_names=vault-reader \
-  bound_service_account_namespaces=apps \
-  policies=apps-read ttl=1h
 ```
 
-The port-forward runs in the background. The Vault UI is at `http://localhost:8200/ui`. `vault login` asks for the `Initial Root Token` from step 1.
-
-ESO logs in with a token of ServiceAccount `apps/vault-reader` and can only read `secret/apps/*`.
+The port-forward runs in the background. The Vault UI is at `http://localhost:8200/ui`. `vault login` asks for the root token from step 1.
 
 ## 4. Secrets per application
 
@@ -67,7 +54,7 @@ The key names are the env variable names. Generate passwords with `openssl rand 
 | `secret/apps/mon-home-ass` | `DB_PASSWORD`, `NATS_PASSWORD`, `SOURCE_TOKEN` (token of the statistics-service source `home-assistant`) |
 | `secret/apps/nats` | `STATS_SERVICE_PASSWORD` (= `NATS_PASSWORD` of statistics-service), `COLLECTOR_PASSWORD`, `MON_HOME_ASS_PASSWORD` (= `NATS_PASSWORD` of mon-home-ass) |
 
-Commands for the first setup: [setup.md](setup.md), step 7. Examples:
+`scripts/install.sh` writes the first values ([setup.md](setup.md), step 4). Changing them later, after step 3:
 
 ```bash
 vault kv put secret/apps/mon-home-ass DB_PASSWORD=-
@@ -102,7 +89,7 @@ kubectl -n apps get externalsecret
 
 Every ExternalSecret must show STATUS `SecretSynced` and READY `True`.
 
-`SecretSyncedError`: Vault is sealed (step 2), the key does not exist in Vault (step 4) or the role is missing (step 3). The details are in `kubectl -n apps describe externalsecret <app>-secrets`.
+`SecretSyncedError`: Vault is sealed (step 2), the key does not exist in Vault (step 4) or the role is missing (step 1). The details are in `kubectl -n apps describe externalsecret <app>-secrets`.
 
 ## Backup and restore
 

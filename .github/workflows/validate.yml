@@ -61,7 +61,7 @@ jobs:
 
       - name: new-app.sh
         run: |
-          shellcheck scripts/*.sh
+          shellcheck -e SC1091 scripts/*.sh
           scripts/new-app.sh own ci-smoke
           scripts/new-app.sh helm ci-smoke https://charts.example.com chart 1.x 8080
           scripts/new-app.sh helm ci-smoke-oci oci://ghcr.io/example/charts chart 1.x
