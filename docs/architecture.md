@@ -19,6 +19,8 @@ flowchart LR
     GW -->|"statistics.home.arpa/"| UI[statistics-ui]
     GW -->|"statistics.home.arpa/api/"| SS[statistics-service]
     GW -->|"mon-home-ass.home.arpa"| MHA[mon-home-ass]
+    GW -->|"server-mcp-kotlin.home.arpa/mcp"| MCP[server-mcp-kotlin]
+    Agents[Claude Code in the LAN] --> GW
     Devices[devices, collectors] -->|"HTTP push /api/v2/ingest"| GW
     MHA -->|"stats.ingest.home-assistant"| NATS[(NATS JetStream<br/>stream STATS_INGEST)]
     NATS --> SS
@@ -30,6 +32,7 @@ flowchart LR
     SS --> PGS
 ```
 
+- server-mcp-kotlin serves the coding standards to Claude Code over MCP (Streamable HTTP). It calls nothing; the standards are baked into its image.
 - The browser loads statistics-ui and calls statistics-service on the same host under `/api/`, so no CORS is needed.
 - Data gets into statistics-service in two ways: HTTP push from devices, or messages from NATS. mon-home-ass reads Home Assistant's 5-minute statistics and publishes them every 60 s. Details: [statistics-service README, "How data gets in"](https://github.com/jagieloadrian/statistics-service#how-data-gets-in).
 - Inside the cluster Istio ambient encrypts pod-to-pod traffic. AuthorizationPolicies decide which ServiceAccount may call what: the gateway → apps, statistics-service and mon-home-ass → NATS.
