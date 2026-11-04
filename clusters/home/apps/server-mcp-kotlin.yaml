@@ -1,0 +1,29 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: server-mcp-kotlin
+  namespace: flux-system
+spec:
+  interval: 24h
+  url: https://github.com/jagieloadrian/server-mcp-kotlin
+  ref:
+    branch: main
+  ignore: |
+    /*
+    !/.devops/helm/
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: server-mcp-kotlin
+  namespace: flux-system
+spec:
+  dependsOn:
+    - name: infrastructure
+  interval: 10m
+  path: ./.devops/helm
+  prune: true
+  targetNamespace: apps
+  sourceRef:
+    kind: GitRepository
+    name: server-mcp-kotlin
